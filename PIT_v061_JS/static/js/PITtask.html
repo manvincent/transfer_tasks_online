@@ -1,0 +1,2322 @@
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Experiment</title>
+    <script src="Dependencies/taskUtils.js"></script>
+    <script src="Dependencies/counterBalance.js"></script>
+    <script src="jspsych-6.0.5/jspsych.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-image-keyboard-response.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-instructions.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-fullscreen.js"></script>
+    <link href="jspsych-6.0.5/css/jspsych.css" rel="stylesheet" type="text/css"></link>
+  </head>
+  <body></body>
+  <script>
+
+
+
+  // Initialize task parameters
+  var numInstrTrials = 72;
+  var numPavStim = 2;
+  var numPavChecks = 2;
+  var numPavTrials = 60; //Should be a multiple of numPavStim above
+  var numExtinctTrials = 15;
+  var numPITtrials = 72; //Should be a multiple of numPavStim above and door_permute.length below
+  var pitBinSize = numPITtrials/8;
+
+  var numPractTrials_instr = 12;
+  var numPractTrials_pav = 8;
+
+  // Check that numPavTrials and numPITtrials are a multiple of numPavStim (for balanced design)
+  if (numPavTrials%numPavStim !== 0) {
+    throw new RangeError("# Pav Trials not a multiple of stims.");
+  }
+  if (numPITtrials%numPavStim !== 0) {
+    throw new RangeError("# PIT Trials not a multiple of stims.");
+  }
+
+  // Set up choice keys for pavlovian checks
+  var pavcheck_choice_keys = [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),
+                     jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'),
+                     jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3'),
+                     jsPsych.pluginAPI.convertKeyCharacterToKeyCode('4'),
+                     jsPsych.pluginAPI.convertKeyCharacterToKeyCode('5')]
+
+  // Set up trial event durations
+  var pitITIdur = jsPsych.randomization.shuffle(linspace(400,1400,(numPITtrials + numExtinctTrials)));
+
+  // Instrumental timings
+  var instrITIdur = jsPsych.randomization.shuffle(linspace(400,1400,numInstrTrials));
+  var startDur = 100;
+  var cueDur = 1500;
+  var ISIdur = 500;
+  var outDur = 1000;
+
+  // Pavlovian timings
+  var pavITIdur = jsPsych.randomization.shuffle(linspace(500,1500,numPavTrials + numPavChecks));
+  var pavRespDur = 1000
+  var pavISIDur = 250
+  var pavCSDur = 500
+  var pavOutDur = 1250
+
+  // Set up practice trial parameters
+  var pract_numTrials = 6; // Needs to be a multiple of numPavStim for a balanced design
+  var pract_ITIdur = [500,1000];
+
+  // Define the possible outcome vector for low value responses
+  var magOutcomeLow = jsPsych.randomization.shuffle(Array(10).fill(2).concat(Array(2).fill(0)))
+  // Define the possible outcomes for high value responses
+  var magOutcomeHighUncert = jsPsych.randomization.shuffle(Array(5).fill(10).concat(Array(7).fill(0)))
+  var initmagOutcomeHighUncert = Array(10,0,10,0,10,0,10,0,10,0,0,0)
+  var magOutcomeHighCert = jsPsych.randomization.shuffle(Array(10).fill(5).concat(Array(2).fill(0)))
+  var initmagOutcomeHighCert = Array(5,5,5,5,5,0,5,5,5,5,5,0)
+
+  var uncertCond = coinFlip()
+  if (uncertCond == true) {
+    var between_condition = 'pav_uncert'
+  } else {
+    var between_condition = 'pav_cert'
+  }
+
+  // Specify file-name details given counterbalances / permutations
+  // Instrumental:
+  var choice_options = ["l","r"];
+  var door_permute = ["LM", "LR", "MR"];
+  if (numInstrTrials%door_permute.length !== 0) {
+    throw new RangeError("# Instr Trials not a multiple of door permutations.");
+  }
+
+  // Initialize the timeline
+  var timeline = [];
+  // Force fullscreen
+  var go_full = {
+    type: "fullscreen",
+    fullscreen_mode: true,
+    data: {
+      label: "go_full",
+    },
+  };
+  timeline.push(go_full);
+
+
+  // Specify image directories
+  var instructDir =  "../images/Instructions/";
+  var instrDir =  "../images/Instrumental/";
+  var extinctDir =  "../images/Extinction/";
+  var outcomeDir =  "../images/Outcomes/";
+  var pavDir =  "../images/Pavlovian/";
+  var pitDir =  "../images/Transfer/";
+
+  // Specify the trial types
+  var instr_trialType = Array(numInstrTrials).fill('instr_task');
+  var pav_trialType = Array(numPavTrials).fill('pav_task');
+  var pavCheck_trialType = Array(numPavTrials).fill('pav_check');
+  var pit_trialType = Array(numPITtrials).fill('pit_task');
+
+  // Do a coin flip to see if participant gets instrumental or pavlovian training first
+  var instrFirst = coinFlip()
+
+  // Define general fixation slide
+  var iti_page = [instrDir+"fix.png"];
+  jsPsych.pluginAPI.preloadImages(iti_page)
+
+  // INSTRUMENTAL SECTION
+  // Define instrumental slides
+  var instr_start = [instrDir+"instr_start_screen.png"];
+  var instr_blank = [instrDir+"instr_blank.png"];
+  jsPsych.pluginAPI.preloadImages(instr_start)
+  jsPsych.pluginAPI.preloadImages(instr_blank)
+
+  // Assign left/mid/right to low, high uncert, high cert
+  var doorAssign = jsPsych.randomization.shuffle(Array(0,1,2))
+  var lowOutPosition = doorAssign[0]
+  var uncertOutPosition = doorAssign[1]
+  var certOutPosition = doorAssign[2]
+
+  // Assign low outcome
+  var leftLowOut = false
+  var midLowOut = false
+  var rightLowOut = false
+  if (lowOutPosition == 0) {
+    leftLowOut = true
+    var lowOutSide = Array(numInstrTrials).fill('left');
+  } else if (lowOutPosition == 1) {
+    midLowOut = true;
+    var lowOutSide = Array(numInstrTrials).fill('mid')
+  } else if (lowOutPosition == 2) {
+    rightLowOut = true;
+    var lowOutSide = Array(numInstrTrials).fill('right');
+  }
+
+  // Assign high uncertain outcome
+  var leftUncertOut = false
+  var midUncertOut = false
+  var rightUncertOut = false
+  if (uncertOutPosition == 0) {
+    leftUncertOut = true;
+  } else if (uncertOutPosition == 1) {
+    midUncertOut = true;
+  } else if (uncertOutPosition == 2) {
+    rightUncertOut = true;
+  }
+
+  // Assign high certain outcome
+  var leftCertOut = false
+  var midCertOut = false
+  var rightCertOut = false
+  if (certOutPosition == 0) {
+    leftCertOut = true;
+  } else if (certOutPosition == 1) {
+    midCertOut = true;
+  } else if (certOutPosition == 2) {
+    rightCertOut = true;
+  }
+
+  // Get the number of unique outcomes for preloading outcome images
+  var coinColours = ["gold", "green", "pink"];
+  var uniqueOutcomes = magOutcomeLow.concat(magOutcomeHighUncert).concat(magOutcomeHighCert).filter((x, i, a) => a.indexOf(x) == i)
+  var numUniqueOutcomes = uniqueOutcomes.length;
+
+  // Assign outcome (colour <--> position) counterbalance
+  var cb_assignment = getRandomIntInclusive(1,6);
+  var colourAssign = cbProperties(coinColours, cb_assignment);
+  // The first three indices correspond to left/mid/right instrumental outcomes (respectively)
+  var leftOutColour = colourAssign[0];
+  var midOutColour = colourAssign[1];
+  var rightOutColour = colourAssign[2];
+  // Specify which of the (two high) instrumental colours will be paired with Pav case
+  // For 2 CS version (v0_5)
+  if (between_condition == 'pav_uncert') {
+    if (leftUncertOut == true) {
+      var pavOldColour = leftOutColour;
+    } else if (midUncertOut == true) {
+      var pavOldColour = midOutColour;
+    } else if (rightUncertOut == true) {
+      var pavOldColour = midOutColour;
+    }
+  } else if (between_condition == 'pav_cert') {
+    if (leftCertOut == true) {
+      var pavOldColour = leftOutColour;
+    } else if (midCertOut == true) {
+      var pavOldColour = midOutColour;
+    } else if (rightCertOut == true) {
+      var pavOldColour = midOutColour;
+    }
+  }
+  var pavOldColour_idx = indexOfAll(colourAssign,pavOldColour)
+  // Create arrays to store on each trial
+  // Make an array to encode the left/mid/right colours on each trial
+  var leftOutColour_array = Array(numInstrTrials).fill(leftOutColour);
+  var midOutColour_array = Array(numInstrTrials).fill(midOutColour);
+  var rightOutColour_array = Array(numInstrTrials).fill(rightOutColour);
+  // Make array to encode the index of the low magnitude door
+  var lowOutIdx_array = Array(numInstrTrials).fill(lowOutPosition);
+  var uncertOutIdx_array = Array(numInstrTrials).fill(uncertOutPosition);
+  var certOutIdx_array = Array(numInstrTrials).fill(certOutPosition);
+
+  // Make an array to encode the pavlovian outcome colour (if matching one of the instrumental outcomes)
+  var pavOldColour_array = Array(numPavTrials).fill(pavOldColour);
+  var pavOldIdx_array = Array(numPavTrials).fill(pavOldColour_idx)
+
+
+  // Assign active doors (LM/LR/MR) across trials
+  var shuffled_trialDoors = jsPsych.randomization.shuffle([].concat.apply([], Array(numInstrTrials/door_permute.length).fill(door_permute)));
+
+  // Have the first 12 trials always be the active doors between the two high-valued options
+  if (lowOutSide.filter((v, i, a) => a.indexOf(v) === i) == 'left') {
+    for (i = 0; i < 12; i++) {
+      replace_idx = indexOfAll(shuffled_trialDoors,"MR")
+      shuffled_trialDoors.splice(replace_idx[Math.floor(Math.random() * replace_idx.length)],1)
+    }
+    shuffled_trialDoors.splice(0,0,"MR","MR","MR","MR","MR","MR","MR","MR","MR","MR","MR","MR")
+  } else if (lowOutSide.filter((v, i, a) => a.indexOf(v) === i) == 'mid') {
+    for (i = 0; i < 12; i++) {
+      replace_idx = indexOfAll(shuffled_trialDoors,"LR")
+      shuffled_trialDoors.splice(replace_idx[Math.floor(Math.random() * replace_idx.length)],1)
+    }
+    shuffled_trialDoors.splice(0,0,"LR","LR","LR","LR","LR","LR","LR","LR","LR","LR","LR","LR")
+  } else if (lowOutSide.filter((v, i, a) => a.indexOf(v) === i) == 'right') {
+    for (i = 0; i < 12; i++) {
+      replace_idx = indexOfAll(shuffled_trialDoors,"LM")
+      shuffled_trialDoors.splice(replace_idx[Math.floor(Math.random() * replace_idx.length)],1)
+    }
+    shuffled_trialDoors.splice(0,0,"LM","LM","LM","LM","LM","LM","LM","LM","LM","LM","LM","LM")
+  }
+  // Specify which keys are allowable given the active doors on each trial
+  var allowable_keys = []
+  var left_allowableKey = []
+  var right_allowableKey = []
+  for (t = 0; t < numInstrTrials; t++) {
+    if (shuffled_trialDoors[t] == "LM") {
+      allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2')])
+      left_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'))
+      right_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'))
+    } else if (shuffled_trialDoors[t] == "LR") {
+      allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3')])
+      left_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'))
+      right_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3'))
+    } else if (shuffled_trialDoors[t] == "MR") {
+      allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3')])
+      left_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'))
+      right_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3'))
+    }
+  }
+
+
+  // Preload 'trial active' files
+  var instr_active_LM = [instrDir+"instr_active_LM.png"];
+  var instr_active_LR = [instrDir+"instr_active_LR.png"];
+  var instr_active_MR = [instrDir+"instr_active_MR.png"];
+  jsPsych.pluginAPI.preloadImages(instr_active_LM)
+  jsPsych.pluginAPI.preloadImages(instr_active_LR)
+  jsPsych.pluginAPI.preloadImages(instr_active_MR)
+
+  // Set up which doors (2/3) are active on each trial
+  var trial_activeDoors = [];
+  for (t = 0; t < numInstrTrials; t++) {
+    if (shuffled_trialDoors[t] == "LM") {
+      trial_activeDoors.push(instr_active_LM)
+    } else if (shuffled_trialDoors[t] == "LR") {
+      trial_activeDoors.push(instr_active_LR)
+    } else if (shuffled_trialDoors[t] == "MR") {
+      trial_activeDoors.push(instr_active_MR)
+    }
+  }
+
+  // Preload 'response' files
+  var instr_choice_LM = Array(choice_options.length).fill(0);
+  var instr_choice_LR = Array(choice_options.length).fill(0);
+  var instr_choice_MR = Array(choice_options.length).fill(0);
+  for (c = 0; c < choice_options.length; c++) {
+    instr_choice_LM[c] = [instrDir+"instr_choice_LM_" + choice_options[c] + ".png"];
+    instr_choice_LR[c] = [instrDir+"instr_choice_LR_" + choice_options[c] + ".png"];
+    instr_choice_MR[c] = [instrDir+"instr_choice_MR_" + choice_options[c] + ".png"];
+  }
+  jsPsych.pluginAPI.preloadImages(instr_choice_LM)
+  jsPsych.pluginAPI.preloadImages(instr_choice_LR)
+  jsPsych.pluginAPI.preloadImages(instr_choice_MR)
+  // Set up which files are presented conditional on active doors and responses
+  var trial_leftResp = [];
+  var trial_rightResp = [];
+  for (t = 0; t < numInstrTrials; t++) {
+    if (shuffled_trialDoors[t] == "LM") {
+      trial_leftResp.push(instr_choice_LM[0])
+      trial_rightResp.push(instr_choice_LM[1])
+    } else if (shuffled_trialDoors[t] == "LR") {
+      trial_leftResp.push(instr_choice_LR[0])
+      trial_rightResp.push(instr_choice_LR[1])
+    } else if (shuffled_trialDoors[t] == "MR") {
+      trial_leftResp.push(instr_choice_MR[0])
+      trial_rightResp.push(instr_choice_MR[1])
+    }
+  }
+
+
+  // Specify the outcome magnitudes behind each door
+  var left_instrOutMag = [];
+  var mid_instrOutMag = [];
+  var right_instrOutMag = [];
+  if (leftLowOut == true) {
+    var left_instrOutMag = jsPsych.randomization.shuffle(makeRepeated(magOutcomeLow,numInstrTrials/magOutcomeLow.length));
+  } else if (midLowOut == true) {
+    var mid_instrOutMag = jsPsych.randomization.shuffle(makeRepeated(magOutcomeLow,numInstrTrials/magOutcomeLow.length));
+  } else if (rightLowOut == true) {
+    var right_instrOutMag = jsPsych.randomization.shuffle(makeRepeated(magOutcomeLow,numInstrTrials/magOutcomeLow.length));
+  }
+  if (leftUncertOut == true) {
+    var left_instrOutMag = initmagOutcomeHighUncert.concat(jsPsych.randomization.shuffle(makeRepeated(magOutcomeHighUncert,(numInstrTrials-12)/magOutcomeHighUncert.length)));
+  } else if (midUncertOut == true) {
+    var mid_instrOutMag = initmagOutcomeHighUncert.concat(jsPsych.randomization.shuffle(makeRepeated(magOutcomeHighUncert,(numInstrTrials-12)/magOutcomeHighUncert.length)));
+  } else if (rightUncertOut == true) {
+    var right_instrOutMag = initmagOutcomeHighUncert.concat(jsPsych.randomization.shuffle(makeRepeated(magOutcomeHighUncert,(numInstrTrials-12)/magOutcomeHighUncert.length)));
+  }
+  if (leftCertOut == true) {
+    var left_instrOutMag = initmagOutcomeHighCert.concat(jsPsych.randomization.shuffle(makeRepeated(magOutcomeHighCert,(numInstrTrials-12)/magOutcomeHighCert.length)));
+  } else if (midCertOut == true) {
+    var mid_instrOutMag = initmagOutcomeHighCert.concat(jsPsych.randomization.shuffle(makeRepeated(magOutcomeHighCert,(numInstrTrials-12)/magOutcomeHighCert.length)));
+  } else if (rightCertOut == true) {
+    var right_instrOutMag = initmagOutcomeHighCert.concat(jsPsych.randomization.shuffle(makeRepeated(magOutcomeHighCert,(numInstrTrials-12)/magOutcomeHighCert.length)));
+  }
+
+
+
+
+  // Assign  outcome parameters given the left/right -- high/low counterbalance
+  var left_OutcomeStim = []; // left_* and right_* refer to the response (not the door position)_
+  var right_OutcomeStim = [];
+  // Loop through trials and define what the outcome file path is, conditional on active doors, cb, and reward magnitude
+  for (t = 0; t < numInstrTrials; t++) {
+    // Define the outcome image if left response
+    if (shuffled_trialDoors[t] == "LM") {
+      if (left_instrOutMag[t] == 0) {
+        left_OutcomeStim.push(outcomeDir+"reward_0/counterBalance_"+cb_assignment+"/instr_win_LM_l.png");
+      } else if (left_instrOutMag[t] == 2) {
+        left_OutcomeStim.push(outcomeDir+"reward_2/counterBalance_"+cb_assignment+"/instr_win_LM_l.png");
+      } else if (left_instrOutMag[t] == 5) {
+        left_OutcomeStim.push(outcomeDir+"reward_5/counterBalance_"+cb_assignment+"/instr_win_LM_l.png");
+      } else if (left_instrOutMag[t] == 10) {
+        left_OutcomeStim.push(outcomeDir+"reward_10/counterBalance_"+cb_assignment+"/instr_win_LM_l.png");
+      }
+      if (mid_instrOutMag[t] == 0) {
+        right_OutcomeStim.push(outcomeDir+"reward_0/counterBalance_" + cb_assignment + "/instr_win_LM_r.png");
+      } else if (mid_instrOutMag[t] == 2) {
+        right_OutcomeStim.push(outcomeDir+"reward_2/counterBalance_" + cb_assignment + "/instr_win_LM_r.png");
+      } else if (mid_instrOutMag[t] == 5) {
+        right_OutcomeStim.push(outcomeDir+"reward_5/counterBalance_" + cb_assignment + "/instr_win_LM_r.png");
+      } else if (mid_instrOutMag[t] == 10) {
+        right_OutcomeStim.push(outcomeDir+"reward_10/counterBalance_" + cb_assignment + "/instr_win_LM_r.png");
+      }
+    } else if (shuffled_trialDoors[t] == "LR") {
+      if (left_instrOutMag[t] == 0) {
+        left_OutcomeStim.push(outcomeDir+"reward_0/counterBalance_"+cb_assignment+"/instr_win_LR_l.png");
+      } else if (left_instrOutMag[t] == 2) {
+        left_OutcomeStim.push(outcomeDir+"reward_2/counterBalance_"+cb_assignment+"/instr_win_LR_l.png");
+      } else if (left_instrOutMag[t] == 5) {
+        left_OutcomeStim.push(outcomeDir+"reward_5/counterBalance_"+cb_assignment+"/instr_win_LR_l.png");
+      } else if (left_instrOutMag[t] == 10) {
+        left_OutcomeStim.push(outcomeDir+"reward_10/counterBalance_"+cb_assignment+"/instr_win_LR_l.png");
+      }
+      if (right_instrOutMag[t] == 0) {
+        right_OutcomeStim.push(outcomeDir+"reward_0/counterBalance_" + cb_assignment + "/instr_win_LR_r.png");
+      } else if (right_instrOutMag[t] == 2) {
+        right_OutcomeStim.push(outcomeDir+"reward_2/counterBalance_" + cb_assignment + "/instr_win_LR_r.png");
+      } else if (right_instrOutMag[t] == 5) {
+        right_OutcomeStim.push(outcomeDir+"reward_5/counterBalance_" + cb_assignment + "/instr_win_LR_r.png");
+      } else if (right_instrOutMag[t] == 10) {
+        right_OutcomeStim.push(outcomeDir+"reward_10/counterBalance_" + cb_assignment + "/instr_win_LR_r.png");
+      }
+    } else if (shuffled_trialDoors[t] == "MR") {
+      if (mid_instrOutMag[t] == 0) {
+        left_OutcomeStim.push(outcomeDir+"reward_0/counterBalance_" + cb_assignment + "/instr_win_MR_l.png");
+      } else if (mid_instrOutMag[t] == 2) {
+        left_OutcomeStim.push(outcomeDir+"reward_2/counterBalance_" + cb_assignment + "/instr_win_MR_l.png");
+      } else if (mid_instrOutMag[t] == 5) {
+        left_OutcomeStim.push(outcomeDir+"reward_5/counterBalance_" + cb_assignment + "/instr_win_MR_l.png");
+      } else if (mid_instrOutMag[t] == 10) {
+        left_OutcomeStim.push(outcomeDir+"reward_10/counterBalance_" + cb_assignment + "/instr_win_MR_l.png");
+      }
+      if (right_instrOutMag[t] == 0) {
+        right_OutcomeStim.push(outcomeDir+"reward_0/counterBalance_" + cb_assignment + "/instr_win_MR_r.png");
+      } else if (right_instrOutMag[t] == 2) {
+        right_OutcomeStim.push(outcomeDir+"reward_2/counterBalance_" + cb_assignment + "/instr_win_MR_r.png");
+      } else if (right_instrOutMag[t] == 5) {
+        right_OutcomeStim.push(outcomeDir+"reward_5/counterBalance_" + cb_assignment + "/instr_win_MR_r.png");
+      } else if (right_instrOutMag[t] == 10) {
+        right_OutcomeStim.push(outcomeDir+"reward_10/counterBalance_" + cb_assignment + "/instr_win_MR_r.png");
+      }
+    }
+  }
+  // Preload images
+  jsPsych.pluginAPI.preloadImages(left_OutcomeStim)
+  jsPsych.pluginAPI.preloadImages(right_OutcomeStim)
+
+
+
+  // EXTINCTION SECTION
+  // Assign active doors (LM/LR/MR) across trials
+  var extinct_shuffled_trialDoors = jsPsych.randomization.shuffle([].concat.apply([], Array(numExtinctTrials/door_permute.length).fill(door_permute)));
+
+  // Set up the doors (2/3) that are active on each extinction trial
+  var extinct_activeDoors = [];
+  for (t = 0; t < numExtinctTrials; t++) {
+    if (extinct_shuffled_trialDoors[t] == "LM") {
+      extinct_activeDoors.push(instr_active_LM)
+    } else if (extinct_shuffled_trialDoors[t] == "LR") {
+      extinct_activeDoors.push(instr_active_LR)
+    } else if (extinct_shuffled_trialDoors[t] == "MR") {
+      extinct_activeDoors.push(instr_active_MR)
+    }
+  }
+  // Set up the response indicators for each extinction trial_leftResp
+  var extinct_leftResp = [];
+  var extinct_rightResp = [];
+  for (t = 0; t < numExtinctTrials; t++) {
+    if (extinct_shuffled_trialDoors[t] == "LM") {
+      extinct_leftResp.push(instr_choice_LM[0])
+      extinct_rightResp.push(instr_choice_LM[1])
+    } else if (extinct_shuffled_trialDoors[t] == "LR") {
+      extinct_leftResp.push(instr_choice_LR[0])
+      extinct_rightResp.push(instr_choice_LR[1])
+    } else if (extinct_shuffled_trialDoors[t] == "MR") {
+      extinct_leftResp.push(instr_choice_MR[0])
+      extinct_rightResp.push(instr_choice_MR[1])
+    }
+  }
+
+  // Define extinction outcome_slides
+  var extinct_Outcome_LM = Array(choice_options.length).fill(0);
+  var extinct_Outcome_LR = Array(choice_options.length).fill(0);
+  var extinct_Outcome_MR = Array(choice_options.length).fill(0);
+  for (c = 0; c < choice_options.length; c++) {
+    extinct_Outcome_LM[c] = [extinctDir+"instr_extinct_LM_" + choice_options[c] + ".png"];
+    extinct_Outcome_LR[c] = [extinctDir+"instr_extinct_LR_" + choice_options[c] + ".png"];
+    extinct_Outcome_MR[c] = [extinctDir+"instr_extinct_MR_" + choice_options[c] + ".png"];
+  }
+  jsPsych.pluginAPI.preloadImages(extinct_Outcome_LM)
+  jsPsych.pluginAPI.preloadImages(extinct_Outcome_LR)
+  jsPsych.pluginAPI.preloadImages(extinct_Outcome_MR)
+  // Set up extinction 'response' images, conditional on active doors and responses
+  var extinct_leftOutcome = [];
+  var extinct_rightOutcome = [];
+  for (t = 0; t < numExtinctTrials; t++) {
+    if (extinct_shuffled_trialDoors[t] == "LM") {
+      extinct_leftOutcome.push(extinct_Outcome_LM[0])
+      extinct_rightOutcome.push(extinct_Outcome_LM[1])
+    } else if (extinct_shuffled_trialDoors[t] == "LR") {
+      extinct_leftOutcome.push(extinct_Outcome_LR[0])
+      extinct_rightOutcome.push(extinct_Outcome_LR[1])
+    } else if (extinct_shuffled_trialDoors[t] == "MR") {
+      extinct_leftOutcome.push(extinct_Outcome_MR[0])
+      extinct_rightOutcome.push(extinct_Outcome_MR[1])
+    }
+  }
+
+  // PAVLOVIAN SECTION
+  // Preload static pavlovian images (hall and ISI)
+  var pav_start = [pavDir+"pav_start_screen.png"];
+  var pavHall = [pavDir + "pav_hall.png"]
+  var pavISI = [pavDir + "pav_darkISI.png"]
+  var pavCheck_prompt = [pavDir + "pavCheck_prompt.png"]
+
+  // Loop through and define different pav stimuli and assoc. outcomes
+  var pavStims = [];
+  var pavOutcomes = [];
+  var pavOutBool = [];
+  var pavOutcome_colour = [];
+  var pavStim_ID = [];
+  // Code for 2 CS (v0_3, v0_5)
+  var cs1_idx = getRandomIntInclusive(1,2);
+  var cs2_idx = getRandomIntInclusive(1,2);
+  while (cs1_idx == cs2_idx) {
+    var cs2_idx = getRandomIntInclusive(1,2);
+  }
+  for (rep = 0; rep < Math.floor(numPavTrials/numPavStim); rep++) {
+    // Assign pavlovian stim slides
+    pavStims.push(pavDir+"cs"+(cs1_idx)+"_blank.png");
+    pavStims.push(pavDir+"cs"+(cs2_idx)+"_blank.png");
+    // Assign pavlovian outcome slides
+    pavOutcomes.push(pavDir+"cs"+(cs1_idx)+"_"+pavOldColour+".png");
+    pavOutcomes.push(pavDir+"cs"+(cs2_idx)+"_blank.png");
+    // Create boolean for accumulating pavNet points
+    pavOutBool.push(true)
+    pavOutBool.push(false)
+    // record pavolivan outcome colours
+    pavOutcome_colour.push(pavOldColour)
+    pavOutcome_colour.push('blank')
+    // record pavlovian stims (to identify CS+, CS-)
+    pavStim_ID.push("cs"+(cs1_idx));
+    pavStim_ID.push("cs"+(cs2_idx));
+  };
+
+  jsPsych.pluginAPI.preloadImages(pavStims)
+  jsPsych.pluginAPI.preloadImages(pavOutcomes)
+  // Yoke shuffled pavlovian CS stims and assoc. outcome coin colours
+  jointShuffle(pavStims, pavOutcomes, pavOutBool, pavOutcome_colour, pavStim_ID);
+
+  // Identify which colours (and yoked Pav stims) are instr_high_uncertain, instr_high_certain, instr_low, or pav_new
+  if (leftLowOut == true) {
+    var instr_low = leftOutColour;
+  } else if (midLowOut == true) {
+    var instr_low = midOutColour;
+  } else if (rightLowOut == true) {
+    var instr_low = rightOutColour;
+  }
+  if (leftUncertOut == true) {
+    var instr_high_uncert = leftOutColour;
+  } else if (midUncertOut == true) {
+    var instr_high_uncert = midOutColour;
+  } else if (rightUncertOut == true) {
+    var instr_high_uncert = rightOutColour;
+  }
+  if (leftCertOut == true) {
+    var instr_high_cert = leftOutColour;
+  } else if (midCertOut == true) {
+    var instr_high_cert = midOutColour;
+  } else if (rightCertOut == true) {
+    var instr_high_cert = rightOutColour;
+  }
+
+  // Create array denoting which outcome condition is presented on each pavlovian trial
+  var trial_PavOutcomeCondition = Array(numPavTrials).fill(0);
+  for (t = 0; t < numPavTrials; t++) {
+    if (pavOutcome_colour[t] == instr_low) {
+      trial_PavOutcomeCondition[t] = "instr_low";
+    } else if (pavOutcome_colour[t] == instr_high_uncert) {
+      trial_PavOutcomeCondition[t] = "instr_high_uncert";
+    } else if (pavOutcome_colour[t] == instr_high_cert) {
+      trial_PavOutcomeCondition[t] = "instr_high_cert";
+    }
+  }
+
+  // Preload pavlovian choice check slides
+  var pavChoices = [];
+  pavChoices.push(pavDir+"cs"+(cs1_idx)+"_pavCheck.png");
+  pavChoices.push(pavDir+"cs"+(cs2_idx)+"_pavCheck.png");
+  jsPsych.pluginAPI.preloadImages(pavChoices);
+  jointShuffle(pavChoices);
+
+
+  // TRANSFER SECTION
+  // Create array of 24 high-door, 12 low-door pairings (x2 CS)
+  if (leftLowOut) {
+    highDoor_array = Array(numPITtrials / numPavStim * (2/door_permute.length)).fill("MR")
+    lowDoor_array1 = Array(numPITtrials / numPavStim * ((door_permute.length - 2)/door_permute.length)/2).fill("LM")
+    lowDoor_array2 = Array(numPITtrials / numPavStim * ((door_permute.length - 2)/door_permute.length)/2).fill("LR")
+  } else if (midLowOut) {
+    highDoor_array = Array(numPITtrials / numPavStim * (2/door_permute.length)).fill("LR")
+    lowDoor_array1 = Array(numPITtrials / numPavStim * ((door_permute.length - 2)/door_permute.length)/2).fill("LM")
+    lowDoor_array2 = Array(numPITtrials / numPavStim * ((door_permute.length - 2)/door_permute.length)/2).fill("MR")
+  } else if (rightLowOut) {
+    highDoor_array = Array(numPITtrials / numPavStim * (2/door_permute.length)).fill("LM")
+    lowDoor_array1 = Array(numPITtrials / numPavStim * ((door_permute.length - 2)/door_permute.length)/2).fill("MR")
+    lowDoor_array2 = Array(numPITtrials / numPavStim * ((door_permute.length - 2)/door_permute.length)/2).fill("LR")
+  }
+
+  // Assign transfer shuffled doors
+  var pit_shuffled_trialDoors = [].concat.apply([],Array(2).fill(highDoor_array.concat(lowDoor_array1).concat(lowDoor_array2)));
+
+  // Loop through and define different PIT stimuli and assoc. responses
+  var pit_blank = [];
+  var pit_active = [];
+  var pit_leftResp = [];
+  var pit_rightResp = [];
+  var pit_leftOutcome = [];
+  var pit_rightOutcome = [];
+  var pit_trialCondition = [];
+
+  // First randomise the order of the CS presentation
+  var pit_CSorder = [].concat.apply([], Array(numPITtrials/numPavStim).fill(cs1_idx).concat(Array(numPITtrials/numPavStim).fill(cs2_idx)));
+
+  // Assign the trial-wise stims
+  for (t = 0; t < numPITtrials; t++) {
+    var curr_pitCS = pit_CSorder[t];
+    var curr_pitDoors = pit_shuffled_trialDoors[t];
+    // Assign PIT blank slides
+    pit_blank.push(pitDir+"PIT_cs"+curr_pitCS+"_blank.png");
+    // Assign PIT active slides
+    pit_active.push(pitDir+"PIT_cs"+curr_pitCS+"_active_"+curr_pitDoors+".png");
+    // Assign PIT response slides
+    pit_leftResp.push(pitDir+"PIT_cs"+curr_pitCS+"_choice_"+curr_pitDoors+"_l.png");
+    pit_rightResp.push(pitDir+"PIT_cs"+curr_pitCS+"_choice_"+curr_pitDoors+"_r.png");
+    // Assign PIT outcome outcome slides
+    pit_leftOutcome.push(pitDir+"PIT_cs"+curr_pitCS+"_extinct_"+curr_pitDoors+"_l.png");
+    pit_rightOutcome.push(pitDir+"PIT_cs"+curr_pitCS+"_extinct_"+curr_pitDoors+"_r.png");
+    // Create vector of what PIT condition the trial is in
+    if (curr_pitCS == cs1_idx) {
+      pit_trialCondition.push("cs" + cs1_idx + "_cs+")
+    } else if (curr_pitCS == cs2_idx) {
+      pit_trialCondition.push("cs" + cs2_idx + "_cs-")
+    }
+  }
+  jsPsych.pluginAPI.preloadImages(pit_blank)
+  jsPsych.pluginAPI.preloadImages(pit_active)
+  jsPsych.pluginAPI.preloadImages(pit_leftResp)
+  jsPsych.pluginAPI.preloadImages(pit_rightResp)
+  jsPsych.pluginAPI.preloadImages(pit_leftOutcome)
+  jsPsych.pluginAPI.preloadImages(pit_rightOutcome)
+  // Shuffle the PIT trials
+  jointShuffle(pit_shuffled_trialDoors, pit_CSorder, pit_blank, pit_active, pit_leftResp, pit_rightResp, pit_leftOutcome, pit_rightOutcome, pit_trialCondition);
+
+  // The extinct (non-PIT) trials are distributed along the PIT section according
+  // to ceil(exp(trialBin * -0.5)*(binSize-1))
+  var pitBins = arange(0,numPITtrials/pitBinSize-1,1,0);
+  var extinctDistr = [];
+  var newCount = [];
+  var counter = 0;
+  for (e = 0; e < pitBins.length; e++) {
+    var newCount = Math.ceil(Math.exp(pitBins[e]*-0.5)*(pitBinSize-1));
+    counter = counter + newCount;
+    if (counter < numExtinctTrials + 1) {
+      extinctDistr.push(newCount);
+    } else if ((counter > numExtinctTrials) && (arrSum(extinctDistr) < numExtinctTrials)) {
+      extinctDistr.push(numExtinctTrials - arrSum(extinctDistr));
+    } else {
+      extinctDistr.push(0);
+    }
+  }
+
+  // Insert extinction Trials
+  // Initialize array that guarantees first trials in PIT section are all extinction (non-PIT) trials
+  var pitExtinctBool = Array(extinctDistr[0]).fill(1).concat(Array(pitBinSize).fill(0));
+  // Then loop through and shuffle the number of extinct trials in each PIT-section bin, according to extinctDistr
+  for (b = 1; b < pitBins.length; b++) {
+    currBin = [];
+    currBin = Array(extinctDistr[b]).fill(1).concat(Array(pitBinSize).fill(0));
+    jointShuffle(currBin);
+    pitExtinctBool = pitExtinctBool.concat(currBin);
+  }
+
+  // Insert paths to the extinction images for where pitExtinctBool == 1
+  for (i = 0; i < indexOfAll(pitExtinctBool,1).length; i++) {
+    currIndex = [];
+    currIndex = indexOfAll(pitExtinctBool,1)[i];
+    pit_shuffled_trialDoors.splice(currIndex,0,extinct_shuffled_trialDoors[i]);
+    pit_blank.splice(currIndex,0,instr_blank[0]);
+    pit_active.splice(currIndex,0,extinct_activeDoors[i][0]);
+    pit_leftResp.splice(currIndex,0,extinct_leftResp[i][0]);
+    pit_rightResp.splice(currIndex,0,extinct_rightResp[i][0]);
+    pit_leftOutcome.splice(currIndex,0,extinct_leftOutcome[i][0]);
+    pit_rightOutcome.splice(currIndex,0,extinct_rightOutcome[i][0]);
+    pit_trialType.splice(currIndex,0,'extinct');
+    pit_trialCondition.splice(currIndex,0,'extinct')
+  }
+  // Specify which keys are allowable given the active doors on each trial
+  var pit_allowable_keys = []
+  var pit_left_allowableKey = []
+  var pit_right_allowableKey = []
+  for (t = 0; t < numPITtrials + numExtinctTrials; t++) {
+    if (pit_shuffled_trialDoors[t] == "LM") {
+      pit_allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2')])
+      pit_left_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'))
+      pit_right_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'))
+    } else if (pit_shuffled_trialDoors[t] == "LR") {
+      pit_allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3')])
+      pit_left_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'))
+      pit_right_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3'))
+    } else if (pit_shuffled_trialDoors[t] == "MR") {
+      pit_allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3')])
+      pit_left_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'))
+      pit_right_allowableKey.push(jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3'))
+    }
+  }
+
+
+  // Preload the end of instructions slide
+  var instruct_end = [instructDir + "instruct_end.png"]
+  jsPsych.pluginAPI.preloadImages(instruct_end)
+
+  // Preload the end of task slide
+  var task_end = ["../images/task_end.png"]
+  jsPsych.pluginAPI.preloadImages(task_end)
+
+  // Specify instruction keys
+  var choice_keys = {
+      "prev": jsPsych.pluginAPI.convertKeyCharacterToKeyCode('leftarrow'),
+      "next": jsPsych.pluginAPI.convertKeyCharacterToKeyCode('rightarrow'),
+      "one": jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),
+      "two": jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'),
+      "three": jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3'),
+      "space": jsPsych.pluginAPI.convertKeyCharacterToKeyCode('space')
+  };
+
+  // pages from which key(s) other than left/right arrows are used for flipping slides
+  var instr_except_pages = {
+      1: [choice_keys.next],
+      13: [choice_keys.three, choice_keys.prev],
+      18: [choice_keys.one, choice_keys.prev],
+      19: [choice_keys.next],
+      20: [choice_keys.next],
+      22: [choice_keys.two, choice_keys.prev],
+      23: [choice_keys.next],
+      24: [choice_keys.next],
+      32: [choice_keys.three],
+      33: [choice_keys.space]
+  };
+  let prev_next = [choice_keys.next, choice_keys.prev];
+  var instr_choiceKey_array = [];   // array holding valid keys for each instruction page
+
+  // Preload instrumental instruction slides
+  var instr_instruct = [];
+  var instr_instruct_pages = 33
+  for (s = 0; s < instr_instruct_pages; s++) {
+    slideNo = s + 1;
+
+    // add options from exception_pages for instructions with questions
+    if (! (slideNo in instr_except_pages)) {
+       instr_choiceKey_array.push(prev_next);
+    } else {
+      instr_choiceKey_array.push(instr_except_pages[slideNo]);
+    }
+
+    instr_instruct.push(instructDir + 'instruct_instr/instruct_' + slideNo + '.png');
+  }
+  jsPsych.pluginAPI.preloadImages(instr_instruct)
+
+
+
+
+  // pages from which key(s) other than left/right arrows are used for flipping slides
+  var pav_except_pages = {
+      2: [choice_keys.next, choice_keys.prev],
+      3: [choice_keys.space],
+      7: [choice_keys.three],
+      8: [choice_keys.space],
+      12: [choice_keys.space]
+  };
+  let next= [choice_keys.next];
+  var pav_choiceKey_array = [];   // array holding valid keys for each instruction page
+
+  // Preload instrumental instruction slides
+  var pav_instruct = [];
+  var pav_instruct_pages = 12
+  for (s = 0; s < pav_instruct_pages; s++) {
+    slideNo = s + 1;
+
+    // add options from exception_pages for instructions with questions
+    if (! (slideNo in  pav_except_pages)) {
+      pav_choiceKey_array.push(next);
+    } else {
+      pav_choiceKey_array.push(pav_except_pages[slideNo]);
+    }
+
+    pav_instruct.push(instructDir + 'instruct_pav/instruct_' + slideNo + '.png');
+  }
+  jsPsych.pluginAPI.preloadImages(pav_instruct)
+
+
+
+  // pages from which key(s) other than left/right arrows are used for flipping slides
+  var pit_except_pages = {
+      1: [choice_keys.next],
+      4: [choice_keys.three, choice_keys.prev],
+      5: [choice_keys.next],
+      6: [choice_keys.next],
+      7: [choice_keys.space]
+  };
+  var pit_choiceKey_array = [];   // array holding valid keys for each instruction page
+
+  // Preload instrumental instruction slides
+  var pit_instruct = [];
+  var pit_instruct_pages = 6
+  for (s = 0; s < pit_instruct_pages; s++) {
+    slideNo = s + 1;
+
+    // add options from exception_pages for instructions with questions
+    if (! (slideNo in pit_except_pages)) {
+      pit_choiceKey_array.push(prev_next);
+    } else {
+      pit_choiceKey_array.push(pit_except_pages[slideNo]);
+    }
+
+    pit_instruct.push(instructDir + 'instruct_PIT/instruct_' + slideNo + '.png');
+  }
+  jsPsych.pluginAPI.preloadImages(pit_instruct)
+
+
+
+  // Set up practice instrumental trials
+  // Assign active doors (LM/LR/MR) across trials
+  var pract_shuffled_trialDoors = jsPsych.randomization.shuffle([].concat.apply([], Array(numPractTrials_instr/door_permute.length).fill(door_permute)));
+
+  // Specify which keys are allowable given the active doors on each trial
+  var pract_allowable_keys = []
+  for (t = 0; t < numInstrTrials; t++) {
+    if (pract_shuffled_trialDoors[t] == "LM") {
+      pract_allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2')])
+    } else if (pract_shuffled_trialDoors[t] == "LR") {
+      pract_allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3')])
+    } else if (pract_shuffled_trialDoors[t] == "MR") {
+      pract_allowable_keys.push([jsPsych.pluginAPI.convertKeyCharacterToKeyCode('2'),jsPsych.pluginAPI.convertKeyCharacterToKeyCode('3')])
+    }
+  }
+
+  var pract_activeDoors = [];
+  for (t = 0; t < numPractTrials_instr; t++) {
+    if (pract_shuffled_trialDoors[t] == "LM") {
+      pract_activeDoors.push(instr_active_LM)
+    } else if (pract_shuffled_trialDoors[t] == "LR") {
+      pract_activeDoors.push(instr_active_LR)
+    } else if (pract_shuffled_trialDoors[t] == "MR") {
+      pract_activeDoors.push(instr_active_MR)
+    }
+  }
+
+  var pract_trial_leftResp = [];
+  var pract_trial_rightResp = [];
+  for (t = 0; t < numPractTrials_instr; t++) {
+    if (pract_shuffled_trialDoors[t] == "LM") {
+      pract_trial_leftResp.push(instr_choice_LM[0])
+      pract_trial_rightResp.push(instr_choice_LM[1])
+    } else if (pract_shuffled_trialDoors[t] == "LR") {
+      pract_trial_leftResp.push(instr_choice_LR[0])
+      pract_trial_rightResp.push(instr_choice_LR[1])
+    } else if (pract_shuffled_trialDoors[t] == "MR") {
+      pract_trial_leftResp.push(instr_choice_MR[0])
+      pract_trial_rightResp.push(instr_choice_MR[1])
+    }
+  }
+
+
+
+  // Assign  outcome parameters given the left/right -- high/low counterbalance
+  var pract_left_OutcomeStim = []; // left_* and right_* refer to the response (not the door position)_
+  var pract_right_OutcomeStim = [];
+  // Loop through trials and define what the outcome file path is, conditional on active doors, cb, and reward magnitude
+  for (t = 0; t < numPractTrials_instr; t++) {
+    if (t == 4 || t == 10) {
+      if (pract_shuffled_trialDoors[t] == "LM") {
+        pract_left_OutcomeStim.push(extinctDir+"instr_extinct_LM_l.png");
+        pract_right_OutcomeStim.push(extinctDir+"instr_extinct_LM_r.png");
+      } else if (pract_shuffled_trialDoors[t] == "LR") {
+        pract_left_OutcomeStim.push(extinctDir+"instr_extinct_LR_l.png");
+        pract_right_OutcomeStim.push(extinctDir+"instr_extinct_LR_r.png");
+      } else if (pract_shuffled_trialDoors[t] == "MR") {
+        pract_left_OutcomeStim.push(extinctDir+"instr_extinct_MR_l.png");
+        pract_right_OutcomeStim.push(extinctDir+"instr_extinct_MR_r.png");
+      }
+    } else {
+      if (pract_shuffled_trialDoors[t] == "LM") {
+        pract_left_OutcomeStim.push(outcomeDir+"practice/instr_win_LM_l.png");
+        pract_right_OutcomeStim.push(outcomeDir+"practice/instr_win_LM_r.png");
+      } else if (pract_shuffled_trialDoors[t] == "LR") {
+        pract_left_OutcomeStim.push(outcomeDir+"practice/instr_win_LR_l.png");
+        pract_right_OutcomeStim.push(outcomeDir+"practice/instr_win_LR_r.png");
+      } else if (pract_shuffled_trialDoors[t] == "MR") {
+        pract_left_OutcomeStim.push(outcomeDir+"practice/instr_win_MR_l.png");
+        pract_right_OutcomeStim.push(outcomeDir+"practice/instr_win_MR_r.png");
+      }
+    }
+  }
+  jsPsych.pluginAPI.preloadImages(pract_left_OutcomeStim)
+  jsPsych.pluginAPI.preloadImages(pract_right_OutcomeStim)
+
+  var pract_pavStims = [];
+  var pract_pavOutcomes = [];
+  for (rep = 0; rep < numPractTrials_pav; rep++) {
+    // Assign pavlovian stim slides
+    pract_pavStims.push(pavDir+"cs3_blank.png");
+    // Assign pavlovian outcome slides
+    pract_pavOutcomes.push(pavDir+"cs3_pract.png");
+  };
+  pract_pavOutcomes[numPractTrials_pav-2] = pavDir+"cs3_blank.png"
+  jsPsych.pluginAPI.preloadImages(pract_pavStims)
+  jsPsych.pluginAPI.preloadImages(pract_pavOutcomes)
+
+
+  // Instrumental
+  var instr_pagenum = 0;    // holds current page number
+  var instr_choice = [];    // holds keys available from current page
+
+  // dummy event
+  var instr_initInstruct = {
+      type: "html-keyboard-response",
+      stimulus: function() {
+          let htmlstr = "<body><div></div></body>";
+          return htmlstr
+      },
+      choices: jsPsych.NO_KEYS,
+      trial_duration: 0,
+      response_ends_trial: false,
+      data: {
+          label: "instr_initInstruct",
+          page_index: instr_pagenum,
+          pageStep: 1,    // holds 1 if stepping to next page, -1 if stepping to previous
+      },
+  };
+
+  // event to display instruction images
+  var instr_instruct_page = {
+      type: "html-keyboard-response",
+      // dummy stimulus and key choices are reset in on_start()
+      stimulus: "<body><div></div></body>",
+      choices: jsPsych.NO_KEYS,
+      trial_duration: null,
+      response_ends_trial: true,
+      on_start: function (trial) {
+          var prev_data = jsPsych.data.get().last(1).values()[0];
+          instr_pagenum = prev_data.page_index + prev_data.pageStep;
+          trial.stimulus = '<body><div class="centered"><img src=' + instr_instruct[instr_pagenum-1] + ' alt="instruction" width="100%"></div></body>';
+          instr_choice = instr_choiceKey_array[instr_pagenum-1];
+          trial.choices = instr_choice;     // set keys available from current page
+      },
+      on_finish: function (data) {
+          data.page_index = instr_pagenum;
+          // set pageStep, which will be added to page_index to compute the next instr_pagenum
+          if (data.key_press == instr_choice[0]) {
+              data.pageStep = 1
+          } else if  (data.key_press == instr_choice[1]) {
+              data.pageStep = -1
+          }
+          else throw new Error("invalid key press: " + data.key_press)
+      }
+  };
+
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var instr_instruct_trialLoop = {
+      timeline: [instr_instruct_page],
+      // use a loop function to play instruct_page event with different instruction pages
+      // until all instruction pages have been shown
+      loop_function: function (data) {
+          var prev_data = data.values()[0];
+          if (prev_data.pageStep < 0 || prev_data.page_index < instr_instruct_pages) {
+              return true;
+          }
+          else {
+              return false;
+          }
+      }
+  };
+
+  var instruct_instr_trialProcedure = {
+      timeline: [instr_initInstruct, instr_instruct_trialLoop],
+  }
+
+
+  // Pavlovian instruction pages
+  var pav_pagenum = 0;    // holds current page number
+  var pav_choice = [];    // holds keys available from current page
+
+  // dummy event
+  var pav_initInstruct = {
+      type: "html-keyboard-response",
+      stimulus: function() {
+          let htmlstr = "<body><div></div></body>";
+          return htmlstr
+      },
+      choices: jsPsych.NO_KEYS,
+      trial_duration: 0,
+      response_ends_trial: false,
+      data: {
+          label: "pav_initInstruct",
+          page_index: pav_pagenum,
+          pageStep: 1,    // holds 1 if stepping to next page, -1 if stepping to previous
+      },
+  };
+
+  // event to display instruction images
+  var pav_instruct_page = {
+      type: "html-keyboard-response",
+      // dummy stimulus and key choices are reset in on_start()
+      stimulus: "<body><div></div></body>",
+      choices: jsPsych.NO_KEYS,
+      trial_duration: null,
+      response_ends_trial: true,
+      on_start: function (trial) {
+          var prev_data = jsPsych.data.get().last(1).values()[0];
+          pav_pagenum = prev_data.page_index + prev_data.pageStep;
+          trial.stimulus = '<body><div class="centered"><img src=' + pav_instruct[pav_pagenum-1] + ' alt="instruction" width="100%"></div></body>';
+          pav_choice = pav_choiceKey_array[pav_pagenum-1];
+          trial.choices = pav_choice;     // set keys available from current page
+      },
+      on_finish: function (data) {
+          data.page_index = pav_pagenum;
+          // set pageStep, which will be added to page_index to compute the next instr_pagenum
+          if (data.key_press == pav_choice[0]) {
+              data.pageStep = 1
+          } else if  (data.key_press == pav_choice[1]) {
+              data.pageStep = -1
+          }
+          else throw new Error("invalid key press: " + data.key_press)
+      }
+  };
+
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pav_instruct_trialLoop = {
+      timeline: [pav_instruct_page],
+      // use a loop function to play instruct_page event with different instruction pages
+      // until all instruction pages have been shown
+      loop_function: function (data) {
+          var prev_data = data.values()[0];
+          if (prev_data.pageStep < 0 || prev_data.page_index < pav_instruct_pages) {
+              return true;
+          }
+          else {
+              return false;
+          }
+      }
+  };
+
+  var instruct_pav_trialProcedure = {
+      timeline: [pav_initInstruct, pav_instruct_trialLoop],
+  }
+
+
+
+
+  // PIT instruction pages
+  var pit_pagenum = 0;    // holds current page number
+  var pit_choice = [];    // holds keys available from current page
+
+  // dummy event
+  var pit_initInstruct = {
+      type: "html-keyboard-response",
+      stimulus: function() {
+          let htmlstr = "<body><div></div></body>";
+          return htmlstr
+      },
+      choices: jsPsych.NO_KEYS,
+      trial_duration: 0,
+      response_ends_trial: false,
+      data: {
+          label: "pit_initInstruct",
+          page_index: pit_pagenum,
+          pageStep: 1,    // holds 1 if stepping to next page, -1 if stepping to previous
+      },
+  };
+
+  // event to display instruction images
+  var pit_instruct_page = {
+      type: "html-keyboard-response",
+      // dummy stimulus and key choices are reset in on_start()
+      stimulus: "<body><div></div></body>",
+      choices: jsPsych.NO_KEYS,
+      trial_duration: null,
+      response_ends_trial: true,
+      on_start: function (trial) {
+          var prev_data = jsPsych.data.get().last(1).values()[0];
+          pit_pagenum = prev_data.page_index + prev_data.pageStep;
+          trial.stimulus = '<body><div class="centered"><img src=' + pit_instruct[pit_pagenum-1] + ' alt="instruction" width="100%"></div></body>';
+          pit_choice = pit_choiceKey_array[pit_pagenum-1];
+          trial.choices = pit_choice;     // set keys available from current page
+      },
+      on_finish: function (data) {
+          data.page_index = pit_pagenum;
+          // set pageStep, which will be added to page_index to compute the next instr_pagenum
+          if (data.key_press == pit_choice[0]) {
+              data.pageStep = 1
+          } else if  (data.key_press == pit_choice[1]) {
+              data.pageStep = -1
+          }
+          else throw new Error("invalid key press: " + data.key_press)
+      }
+  };
+
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pit_instruct_trialLoop = {
+      timeline: [pit_instruct_page],
+      // use a loop function to play instruct_page event with different instruction pages
+      // until all instruction pages have been shown
+      loop_function: function (data) {
+          var prev_data = data.values()[0];
+          if (prev_data.pageStep < 0 || prev_data.page_index < pit_instruct_pages) {
+              return true;
+          }
+          else {
+              return false;
+          }
+      }
+  };
+
+  var instruct_pit_trialProcedure = {
+      timeline: [pit_initInstruct, pit_instruct_trialLoop],
+  }
+
+
+  var instructEnd = {
+    type: "image-keyboard-response",
+    choices: ['space'],
+    stimulus: instruct_end,
+    response_ends_trial: true,
+    data: {label: "instruct_end"},
+  };
+
+
+
+  // Practice Instrumental trials
+  // Create timeline variable
+  var pract_instrTimeline_var = [];
+  for (var trial = 0; trial < numPractTrials_instr; trial++) {
+    pract_instrTimeline_var.push({
+      tv_activeDoors: pract_activeDoors[trial],
+      tv_allowableKeys: pract_allowable_keys[trial],
+      tv_left_ResponseStim: pract_trial_leftResp[trial],
+      tv_right_ResponseStim: pract_trial_rightResp[trial],
+      tv_left_OutcomeStim: pract_left_OutcomeStim[trial],
+      tv_right_OutcomeStim: pract_right_OutcomeStim[trial]
+    });
+  }
+
+  var pract_pre_iti = {
+    type: "image-keyboard-response",
+    stimulus: iti_page,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: 1000,
+    response_ends_trial: false,
+    data: {label: "pract_pre_iti",
+          trialRespKeys: jsPsych.timelineVariable("tv_allowableKeys"),
+          trialType: jsPsych.timelineVariable("tv_trialType"),
+        }
+  };
+
+  var pract_trial_start = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: instr_blank,
+    trial_duration: startDur,
+    response_ends_trial: false,
+    data: {label: "pract_trial_start"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+    }
+  };
+
+  var pract_cue_on = {
+    type: "image-keyboard-response",
+    choices: jsPsych.timelineVariable("tv_allowableKeys"),
+    stimulus: jsPsych.timelineVariable("tv_activeDoors"),
+    trial_duration: cueDur,
+    response_ends_trial: true,
+    data: {label: "pract_cue_on"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+      data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+    }
+  };
+
+  var pract_left_response = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_left_ResponseStim"),
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (cueDur-prev_data.rt+ISIdur);
+    },
+    response_ends_trial: false,
+    data: {label: "pract_left_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+    }
+  }
+
+  var pract_right_response = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_right_ResponseStim"),
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (cueDur-prev_data.rt+ISIdur);
+    },
+    response_ends_trial: false,
+    data: {label: "pract_right_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+    }
+  };
+
+  var pract_no_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Too slow to respond!</p>",
+    trial_duration: ISIdur + outDur,
+    response_ends_trial: false,
+    data: {label: "pract_no_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+    }
+  };
+
+  var pract_leftOutcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_left_OutcomeStim"),
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "pract_leftOutcome",
+        },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+      // Define the outcome magnitude
+    }
+  };
+
+  var pract_rightOutcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_right_OutcomeStim"),
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "pract_rightOutcome",
+         },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialRespKeys = prev_data.trialRespKeys
+    }
+  };
+
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var pract_leftResp_ifNode = {
+    timeline: [pract_left_response, pract_leftOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == prev_data.trialRespKeys[0]) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var pract_rightResp_ifNode = {
+    timeline: [pract_right_response, pract_rightOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == prev_data.trialRespKeys[1]) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var pract_noResp_ifNode = {
+    timeline: [pract_no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pract_trialProcedure = {
+    timeline: [pract_pre_iti, pract_trial_start, pract_cue_on, pract_leftResp_ifNode, pract_rightResp_ifNode, pract_noResp_ifNode],
+    timeline_variables: pract_instrTimeline_var,
+  };
+
+
+
+  // Pavlovian Practice trials
+  // Create timeline variable
+  var pract_pavTimeline_var = [];
+  for (trial = 0; trial < numPractTrials_pav; trial++) {
+    pract_pavTimeline_var.push({
+      tv_pavStims: pract_pavStims[trial],
+      tv_pavOutcome: pract_pavOutcomes[trial],
+      })
+  };
+
+  var pract_pav_pre_iti = {
+    type: "image-keyboard-response",
+    stimulus: iti_page,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: 1000,
+    response_ends_trial: false,
+    data: {label: "pract_pav_pre_iti"},
+  };
+
+  var pract_pav_response =  {
+    type: "image-keyboard-response",
+    choices: ['space'],
+    stimulus: pavHall,
+    trial_duration: pavRespDur,
+    response_ends_trial: true,
+    data: {label: "pract_pav_response"}
+  };
+
+  var pract_pav_isi = {
+    type: "image-keyboard-response",
+    choices: jsPsych.ALL_KEYS,
+    stimulus: pavISI,
+    trial_duration: function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (pavRespDur - prev_data.rt + pavISIDur)
+    },
+    response_ends_trial: true,
+    data: {label: "pract_pav_isi"}
+  };
+
+  var pract_pav_CS_on = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_pavStims"),
+    trial_duration: pavCSDur,
+    response_ends_trial: false,
+    data: {label: "pract_pav_CS_on"}
+  };
+
+  var pract_pav_outcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_pavOutcome"),
+    trial_duration: pavOutDur,
+    response_ends_trial: false,
+    data: {label: "pract_pav_outcome"}
+  };
+
+  var pract_pav_no_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Too slow to respond!</p>",
+    trial_duration:  pavISIDur + pavCSDur + pavOutDur,
+    response_ends_trial: false,
+    data: {label: "pract_pav_no_response"}
+  };
+
+  var pract_pav_isi_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Error!</p>"+
+              "<p>Do not press any key while waiting!</p>",
+    trial_duration: function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (pavISIDur - prev_data.rt + pavCSDur + pavOutDur)
+    },
+    response_ends_trial: false,
+    data: {label: "NA"},
+  };
+
+  var pract_pavISI_noResp_ifNode = {
+    timeline: [pract_pav_CS_on, pract_pav_outcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  var pract_pavISI_Resp_ifNode = {
+    timeline: [pract_pav_isi_response],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      if (prev_data.key_press != null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  var pract_pavResp_ifNode = {
+    timeline: [pract_pav_isi, pract_pavISI_noResp_ifNode, pract_pavISI_Resp_ifNode],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press != null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  var pract_pavNoResp_ifNode = {
+    timeline: [pract_pav_no_response],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(4).values()[0];
+      if (prev_data.label == 'pract_pav_pre_iti') {
+        return false
+      } else if (prev_data.label != 'pract_pav_response') {
+        return true;
+      } else if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pract_pav_trialProcedure = {
+    timeline: [pract_pav_pre_iti, pract_pav_response, pract_pavResp_ifNode, pract_pavNoResp_ifNode],
+    timeline_variables: pract_pavTimeline_var,
+  };
+
+
+  // Instrumental trials
+  // Create timeline variable
+  var instrTimeline_var = [];
+  for (var trial = 0; trial < numInstrTrials; trial++) {
+    instrTimeline_var.push({
+      tv_activeDoors: trial_activeDoors[trial],
+      tv_leftAllowable: left_allowableKey[trial],
+      tv_rightAllowable: right_allowableKey[trial],
+      tv_left_ResponseStim: trial_leftResp[trial],
+      tv_right_ResponseStim: trial_rightResp[trial],
+      tv_left_OutcomeStim: left_OutcomeStim[trial],
+      tv_right_OutcomeStim: right_OutcomeStim[trial], // end of path-specifying vars
+      tv_trialDoor_condition: shuffled_trialDoors[trial],
+      tv_left_instrOutMag: left_instrOutMag[trial],
+      tv_mid_instrOutMag: mid_instrOutMag[trial],
+      tv_right_instrOutMag: right_instrOutMag[trial],
+      tv_left_OutcomeColour: leftOutColour_array[trial],
+      tv_mid_OutcomeColour: midOutColour_array[trial],
+      tv_right_OutcomeColour: rightOutColour_array[trial],
+      tv_lowOutIdx: lowOutIdx_array[trial],
+      tv_uncertOutIdx: uncertOutIdx_array[trial],
+      tv_certOutIdx: certOutIdx_array[trial],
+      tv_instrITIdur: instrITIdur[trial],
+      tv_lowOutSide: lowOutSide[trial],
+      tv_trialType: instr_trialType[trial],
+      tv_trialNo: "instr_"+(trial+1),
+    });
+  }
+
+  var instrStart = {
+    type: "image-keyboard-response",
+    choices: ['space'],
+    stimulus: instr_start,
+    response_ends_trial: true,
+    data: {
+      label: "instrumental start",
+      instrNet: 0 // tracking total winnings
+    },
+    on_finish: function(data) {
+      data.leftNet = 0
+      data.midNet = 0
+      data.rightNet = 0
+    }
+  };
+
+  var pre_iti = {
+    type: "image-keyboard-response",
+    stimulus: iti_page,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: jsPsych.timelineVariable("tv_instrITIdur"),
+    response_ends_trial: false,
+    data: {label: "pre_iti",
+          trialDoor: jsPsych.timelineVariable("tv_trialDoor_condition"),
+          leftAllowKey: jsPsych.timelineVariable("tv_leftAllowable"),
+          rightAllowKey: jsPsych.timelineVariable("tv_rightAllowable"),
+          leftCoinColour: jsPsych.timelineVariable("tv_left_OutcomeColour"),
+          midCoinColour: jsPsych.timelineVariable("tv_mid_OutcomeColour"),
+          rightCoinColour: jsPsych.timelineVariable("tv_right_OutcomeColour"),
+          lowOutIdx: jsPsych.timelineVariable("tv_lowOutIdx"),
+          uncertOutIdx: jsPsych.timelineVariable("tv_uncertOutIdx"),
+          certOutIdx: jsPsych.timelineVariable("tv_certOutIdx"),
+          leftOutMag: jsPsych.timelineVariable("tv_left_instrOutMag"),
+          midOutMag: jsPsych.timelineVariable("tv_mid_instrOutMag"),
+          rightOutMag: jsPsych.timelineVariable("tv_right_instrOutMag"),
+          lowOutSide: jsPsych.timelineVariable("tv_lowOutSide"),
+          trialType: jsPsych.timelineVariable("tv_trialType"),
+          trialNo: jsPsych.timelineVariable("tv_trialNo")
+        },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.instrNet = prev_data.instrNet
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+    }
+  };
+
+  var trial_start = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: instr_blank,
+    trial_duration: startDur,
+    response_ends_trial: false,
+    data: {label: "trial_start"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.instrNet = prev_data.instrNet
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var cue_on = {
+    type: "image-keyboard-response",
+    choices: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return [prev_data.leftAllowKey, prev_data.rightAllowKey]
+    },
+    stimulus: jsPsych.timelineVariable("tv_activeDoors"),
+    trial_duration: cueDur,
+    response_ends_trial: true,
+    data: {label: "cue_on"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.instrNet = prev_data.instrNet
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+      data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+    }
+  };
+
+  var left_response = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_left_ResponseStim"),
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (cueDur-prev_data.rt+ISIdur);
+    },
+    response_ends_trial: false,
+    data: {label: "left_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.instrNet = prev_data.instrNet
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  }
+
+  var right_response = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_right_ResponseStim"),
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (cueDur-prev_data.rt+ISIdur);
+    },
+    response_ends_trial: false,
+    data: {label: "right_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.instrNet = prev_data.instrNet
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var no_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Too slow to respond!</p>",
+    trial_duration: ISIdur + outDur,
+    response_ends_trial: false,
+    data: {label: "NA"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.instrNet = prev_data.instrNet
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var leftOutcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_left_OutcomeStim"),
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "left outcome",
+          leftMag: jsPsych.timelineVariable("tv_left_instrOutMag"),
+          midMag: jsPsych.timelineVariable("tv_mid_instrOutMag")
+        },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+      // Define the outcome magnitude
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      if (data.trialDoor == "LM") {
+        data.outMag = data.leftMag
+        data.leftNet = data.leftNet + data.leftMag
+      } else if (data.trialDoor == "LR") {
+        data.outMag = data.leftMag
+        data.leftNet = data.leftNet + data.leftMag
+      } else if (data.trialDoor = "MR") {
+        data.outMag = data.midMag
+        data.midNet = data.midNet + data.midMag
+      }
+      // Update iterative variables (net gains)
+      data.instrNet = prev_data.instrNet + data.outMag
+    }
+  };
+
+  var rightOutcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_right_OutcomeStim"),
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "right outcome",
+           midMag: jsPsych.timelineVariable("tv_mid_instrOutMag"),
+           rightMag: jsPsych.timelineVariable("tv_right_instrOutMag")
+         },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+      // Define the outcome magnitude
+      data.leftNet = prev_data.leftNet
+      data.midNet = prev_data.midNet
+      data.rightNet = prev_data.rightNet
+      if (data.trialDoor == "LM") {
+        data.outMag = data.midMag
+        data.midNet = data.midNet + data.midMag
+      } else if (data.trialDoor == "LR") {
+        data.outMag = data.rightMag
+        data.rightNet = data.rightNet + data.rightMag
+      } else if (data.trialDoor = "MR") {
+        data.outMag = data.rightMag
+        data.rightNet = data.rightNet + data.rightMag
+      }
+      // Update iterative variables (net gains)
+      data.instrNet = prev_data.instrNet + data.outMag
+    }
+  };
+
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var leftResp_ifNode = {
+    timeline: [left_response, leftOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == prev_data.leftAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var rightResp_ifNode = {
+    timeline: [right_response, rightOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == prev_data.rightAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var noResp_ifNode = {
+    timeline: [no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var instr_trialProcedure = {
+    timeline: [pre_iti, trial_start, cue_on, leftResp_ifNode, rightResp_ifNode, noResp_ifNode],
+    timeline_variables: instrTimeline_var,
+  };
+
+
+  // Pavlovian trials
+  // Create timeline variable
+  var pavTimeline_var = [];
+  for (var trial = 0; trial < numPavTrials; trial++) {
+    pavTimeline_var.push({
+      tv_pavStims: pavStims[trial],
+      tv_pavStimID: pavStim_ID[trial],
+      tv_pavOutBool: pavOutBool[trial],
+      tv_pavOutcomeColour: pavOutcome_colour[trial],
+      tv_pavOutcomeCondition: trial_PavOutcomeCondition[trial],
+      tv_pavOutcome: pavOutcomes[trial],
+      tv_pavITIdur: pavITIdur[trial],
+      tv_trialType: pav_trialType[trial],
+      tv_trialNo: "pav_"+(trial+1),
+      tv_pavOutCol: pavOldColour_array[trial],
+      tv_pavOutIdx: pavOldIdx_array[trial],
+      })
+  };
+
+  var pavStart = {
+    type: "image-keyboard-response",
+    choices: ['space'],
+    stimulus: pav_start,
+    response_ends_trial: true,
+    data: {
+      label: "pavStart",
+      pavNet: 0,
+    },
+  };
+
+  var pav_pre_iti = {
+    type: "image-keyboard-response",
+    stimulus: iti_page,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: jsPsych.timelineVariable("tv_pavITIdur"),
+    response_ends_trial: false,
+    data: {label: "pav_pre_iti",
+          pavStim_ID: jsPsych.timelineVariable("tv_pavStimID"),
+          csCondition: jsPsych.timelineVariable("tv_pavOutcomeCondition"),
+          trial_type: jsPsych.timelineVariable("tv_trialType"),
+          trialNo: jsPsych.timelineVariable("tv_trialNo"),
+          pavOutCol: jsPsych.timelineVariable("tv_pavOutCol"),
+          pavOutIdx: jsPsych.timelineVariable("tv_pavOutIdx"),
+          pavOutBool: jsPsych.timelineVariable("tv_pavOutBool")
+        },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavNet = prev_data.pavNet
+    }
+  };
+
+  var pav_response =  {
+    type: "image-keyboard-response",
+    choices: ['space'],
+    stimulus: pavHall,
+    trial_duration: pavRespDur,
+    response_ends_trial: true,
+    data: {label: "pav_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavOutBool = prev_data.pavOutBool
+      data.pavNet = prev_data.pavNet
+      data.trialNo = prev_data.trialNo
+      data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+      }
+  };
+
+  var pav_isi = {
+    type: "image-keyboard-response",
+    choices: jsPsych.ALL_KEYS,
+    stimulus: pavISI,
+    trial_duration: function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (pavRespDur - prev_data.rt + pavISIDur)
+    },
+    response_ends_trial: true,
+    data: {label: "pav_isi"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavOutBool = prev_data.pavOutBool
+      data.pavNet = prev_data.pavNet
+    }
+  };
+
+  var pav_CS_on = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_pavStims"),
+    trial_duration: pavCSDur,
+    response_ends_trial: false,
+    data: {label: "pav_CS_on"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavOutBool = prev_data.pavOutBool
+      data.pavNet = prev_data.pavNet
+    }
+  };
+
+  var pav_outcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_pavOutcome"),
+    trial_duration: pavOutDur,
+    response_ends_trial: false,
+    data: {label: "pav_outcome",
+          outColour: jsPsych.timelineVariable("tv_pavOutcomeColour"),
+          outCondition: jsPsych.timelineVariable("tv_pavOutcomeCondition")
+        },
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavOutBool = prev_data.pavOutBool
+      if (data.pavOutBool == true) {
+        data.pavNet = prev_data.pavNet + 1
+      } else {
+        data.pavNet = prev_data.pavNet
+      }
+    }
+  };
+
+  var pav_no_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Too slow to respond!</p>",
+    trial_duration:  pavISIDur + pavCSDur + pavOutDur,
+    response_ends_trial: false,
+    data: {label: "NA"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavNet = prev_data.pavNet
+    }
+  };
+
+  var pav_isi_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Error! Do not press any key while waiting!</p>",
+    trial_duration: function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (pavISIDur - prev_data.rt + pavCSDur + pavOutDur)
+    },
+    response_ends_trial: false,
+    data: {label: "NA"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.pavNet = prev_data.pavNet
+    }
+  };
+
+  var pavISI_noResp_ifNode = {
+    timeline: [pav_CS_on, pav_outcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  var pavISI_Resp_ifNode = {
+    timeline: [pav_isi_response],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      if (prev_data.key_press != null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  var pavResp_ifNode = {
+    timeline: [pav_isi, pavISI_noResp_ifNode, pavISI_Resp_ifNode],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press != null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+
+  var pavNoResp_ifNode = {
+    timeline: [pav_no_response],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(4).values()[0];
+      if (prev_data.label == 'pav_pre_iti') {
+        return false
+      } else if (prev_data.label == 'pav_isi') {
+        return true
+      } else if (prev_data.label == 'instruct_end') {
+        return true;
+      } else if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pav_trialProcedure = {
+    timeline: [pav_pre_iti, pav_response, pavResp_ifNode, pavNoResp_ifNode],
+    timeline_variables: pavTimeline_var,
+  };
+
+
+  var pavCheckTimeline_var = [] ;
+  for (var trial = 0; trial < numPavChecks; trial++) {
+    pavCheckTimeline_var.push({
+      tv_pavChoices: pavChoices[trial],
+      tv_pavCheckITIdur: pavITIdur[trial],
+      tv_trialType: pavCheck_trialType[trial],
+      tv_trialNo: "pav_"+(trial+1),
+    })
+  }
+
+  var pavCheck_pre_iti = {
+    type: "image-keyboard-response",
+    stimulus: iti_page,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: jsPsych.timelineVariable("tv_pavCheckITIdur"),
+    response_ends_trial: false,
+    data: {label: "pavCheck_pre_iti",
+          trial_type: jsPsych.timelineVariable("tv_trialType"),
+          trialNo: jsPsych.timelineVariable("tv_trialNo"),
+        },
+  };
+
+  var pavCheck_prompt = {
+    type: "image-keyboard-response",
+    stimulus: pavCheck_prompt,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: 5000,
+    response_ends_trial: false,
+    data: {label: "pavCheck_prompt"},
+  }
+
+  var pav_choiceTest = {
+    type: "image-keyboard-response",
+    stimulus: jsPsych.timelineVariable("tv_pavChoices"),
+    choices: pavcheck_choice_keys,
+    prompt: "<p>How much would you like to enter?</p>"+
+    		    "<p>Press a key from 1 to 5</p>"+
+            "<p>Press 1 if you very much DO NOT want to enter</p>"+
+            "<p>Press 5 if you very much DO want to enter</p>",
+    trial_duration: 15000,
+    response_ends_trial: true,
+    data: {label: "pav_choiceTest"},
+    on_finish: function(data) {
+      data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+      }
+  };
+
+  var pav_choiceConfirm = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Thank you for responding.</p>"+
+              "<p>Your response was recorded.</p>",
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return ((pavISIDur + pavCSDur + pavOutDur) - prev_data.rt);
+    },
+    response_ends_trial: false,
+    data: {label: "pav_choiceConfirm"}
+  };
+
+  var pav_choice_no_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Too slow to respond!</p>",
+    trial_duration: 500,
+    data: {label: "pav_choice_no_response"}
+  };
+
+  var pav_choice_responseNode = {
+    timeline: [pav_choiceConfirm],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press !== null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var pav_choice_noResponseNode = {
+    timeline: [pav_choice_no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pavCheck_trialProcedure = {
+    timeline: [pavCheck_pre_iti, pavCheck_prompt, pav_choiceTest, pav_choice_responseNode, pav_choice_noResponseNode],
+    timeline_variables: pavCheckTimeline_var,
+  };
+
+
+
+  // PIT trials
+  // Create timeline variable
+  var pitTimeline_var = [];
+  for (var trial = 0; trial < numPITtrials + numExtinctTrials; trial++) {
+    pitTimeline_var.push({
+      tv_blankDoors: pit_blank[trial],
+      tv_activeDoors: pit_active[trial],
+      tv_leftAllowable: pit_left_allowableKey[trial],
+      tv_rightAllowable: pit_right_allowableKey[trial],
+      tv_left_ResponseStim: pit_leftResp[trial],
+      tv_right_ResponseStim: pit_rightResp[trial],
+      tv_left_OutcomeStim: pit_leftOutcome[trial],
+      tv_right_OutcomeStim: pit_rightOutcome[trial], // end of path-specifying vars
+      tv_trialDoor_condition: pit_shuffled_trialDoors[trial],
+      tv_pitCS_condition: pit_trialCondition[trial],
+      tv_pitITIdur: pitITIdur[trial],
+      tv_trialType: pit_trialType[trial],
+      tv_trialNo: "pit_"+(trial+1),
+    });
+  }
+
+  var pitStart = {
+    type: "image-keyboard-response",
+    choices: ['space'],
+    stimulus: instr_start,
+    response_ends_trial: true,
+    data: {
+      label: "pit start",
+    },
+  };
+
+  var pit_pre_iti = {
+    type: "image-keyboard-response",
+    stimulus: iti_page,
+    choices: jsPsych.NO_KEYS,
+    trial_duration: jsPsych.timelineVariable("tv_pitITIdur"),
+    response_ends_trial: false,
+    data: {label: "pit_pre_iti",
+          trialCondition: jsPsych.timelineVariable("tv_pitCS_condition"),
+          trialDoor: jsPsych.timelineVariable("tv_trialDoor_condition"),
+          leftAllowKey: jsPsych.timelineVariable("tv_leftAllowable"),
+          rightAllowKey: jsPsych.timelineVariable("tv_rightAllowable"),
+          trialType: jsPsych.timelineVariable("tv_trialType"),
+          trialNo: jsPsych.timelineVariable("tv_trialNo")
+        },
+  };
+
+  var pit_trial_start = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_blankDoors"),
+    trial_duration: startDur,
+    response_ends_trial: false,
+    data: {label: "pit_trial_start"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var pit_cue_on = {
+    type: "image-keyboard-response",
+    choices: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return [prev_data.leftAllowKey, prev_data.rightAllowKey]
+    },
+    stimulus: jsPsych.timelineVariable("tv_activeDoors"),
+    trial_duration: cueDur,
+    response_ends_trial: true,
+    data: {label: "pit_cue_on"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+      data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+    }
+  };
+
+  var pit_left_response = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_left_ResponseStim"),
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (cueDur-prev_data.rt+ISIdur);
+    },
+    response_ends_trial: false,
+    data: {label: "pit_left_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  }
+
+  var pit_right_response = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_right_ResponseStim"),
+    trial_duration: function() { // filling up remainder of time window based on RT
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      return (cueDur-prev_data.rt+ISIdur);
+    },
+    response_ends_trial: false,
+    data: {label: "pit_right_response"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var pit_no_response = {
+    type: 'html-keyboard-response',
+    choices: jsPsych.NO_KEYS,
+    stimulus: "<p>Too slow to respond!</p>",
+    trial_duration: ISIdur + outDur,
+    response_ends_trial: false,
+    data: {label: "NA"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var pit_leftOutcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_left_OutcomeStim"),
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "left pit_leftOutcome"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  var pit_rightOutcome = {
+    type: "image-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus: jsPsych.timelineVariable("tv_right_OutcomeStim"),
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "right pit_rightOutcome"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.trialDoor = prev_data.trialDoor
+      data.leftAllowKey = prev_data.leftAllowKey
+      data.rightAllowKey = prev_data.rightAllowKey
+    }
+  };
+
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var pit_leftResp_ifNode = {
+    timeline: [pit_left_response, pit_leftOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == prev_data.leftAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var pit_rightResp_ifNode = {
+    timeline: [pit_right_response, pit_rightOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == prev_data.rightAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var pit_noResp_ifNode = {
+    timeline: [pit_no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var pit_trialProcedure = {
+    timeline: [pit_pre_iti, pit_trial_start, pit_cue_on, pit_leftResp_ifNode, pit_rightResp_ifNode, pit_noResp_ifNode],
+    timeline_variables: pitTimeline_var,
+  };
+
+  // Instruction  Instrumental slides
+  // Create timeline variable
+  var endTask_var = [];
+  for (var trial = 0; trial < 1; trial++) {
+    endTask_var.push({
+      tv_end_task: task_end[trial],
+    });
+  }
+
+  var endTaskSlide = {
+    type: "image-keyboard-response",
+    stimulus:  jsPsych.timelineVariable("tv_end_task"),
+    choices: ['space'],
+    trial_duration: null,
+    response_ends_trial: true,
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var endTask_procedure = {
+    timeline: [endTaskSlide],
+    timeline_variables: endTask_var
+  };
+
+
+  // Deliver the instructions (always in the order of: Instrument --> Extinction -- > Pavlovian)
+
+  // Push instrumental instruction objects to the timeline
+	timeline.push(instruct_instr_trialProcedure)
+	timeline.push(pract_trialProcedure)
+
+	// Push pavlovian instruction objects to the timeline
+  timeline.push(instruct_pav_trialProcedure);
+  timeline.push(pract_pav_trialProcedure)
+
+	// Push final PIT instruction objects
+  timeline.push(instruct_pit_trialProcedure);
+	// Push end of instruction objects
+  timeline.push(instructEnd)
+
+  // Run the training sessions
+  if (instrFirst == true) {
+		// runInstrTrain.js
+		// Push instrumental objects to the timeline
+		timeline.push(instrStart);
+		timeline.push(instr_trialProcedure)
+		// runPavTrain.js
+		// Push pavlovian trials to the timeline
+		timeline.push(pavStart);
+		timeline.push(pav_trialProcedure)
+		timeline.push(pavCheck_trialProcedure)
+  } else {
+		// runPavTrain.js
+		// Push pavlovian trials to the timeline
+		timeline.push(pavStart);
+		timeline.push(pav_trialProcedure)
+		timeline.push(pavCheck_trialProcedure)
+		// runInstrTrain.js
+		// Push instrumental objects to the timeline
+		timeline.push(instrStart);
+		timeline.push(instr_trialProcedure)
+	}
+
+  // Run the transfer session
+	// runPITtransfer.js
+	// Push PIT objects to the timeline
+	timeline.push(pitStart);
+	timeline.push(pit_trialProcedure)
+
+	// Run end-task
+	timeline.push(endTask_procedure)
+
+
+
+
+
+  jsPsych.init({
+    timeline: timeline,
+    on_finish: function() {
+        jsPsych.data.displayData();
+      }
+  });
+
+
+  </script>
+</html>

@@ -1,0 +1,15 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+"psycopg2-binary" = "==2.8.3"
+Python = "==2.7.16"
+PsiTurk = "==2.3.4"
+argparse = "==1.1"
+
+[dev-packages]
+
+[requires]
+python_version = "2.7.16"

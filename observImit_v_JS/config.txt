@@ -1,0 +1,48 @@
+[HIT Configuration]
+title = Behavioral Task
+description = A brief 15 minute task. Please disable ad blocker before accepting the task. Please use the Chrome browser if possible.
+amt_keywords = psychology, money
+lifetime = 24
+us_only = true
+approve_requirement = 95
+contact_email_on_error = olab@caltech.edu
+ad_group = Psychology tasks
+psiturk_keywords = psychology, money
+organization_name = California Institute of Technology
+browser_exclude_rule = None
+allow_repeats = false
+
+[Database Parameters]
+database_url = postgres://alstanqbukdnyc:ab1d1ac97a6254fa129d01da09e9cae5dfcd479a099f037b18422e4d5efa939d@ec2-23-23-92-204.compute-1.amazonaws.com:5432/d7jtkpta67gui5
+table_name = turkdemo
+
+[Server Parameters]
+host = 0.0.0.0
+port = 22362
+cutoff_time = 30
+logfile = server.log
+loglevel = 2
+debug = false
+login_username = examplename
+login_pw = examplepassword
+threads = auto
+secret_key = 'asdfadsfads'
+#certfile = <path_to.crt> 
+#keyfile = <path_to.key>
+
+[Task Parameters]
+experiment_code_version = 1.0
+num_conds = 1
+num_counters = 1
+
+[Shell Parameters]
+launch_in_sandbox_mode = false
+
+# If you are not using the psiturk ad server, set `use_psiturk_ad_server` to `false` and point `ad_location` to your proxy server <host> and <port>. Format the ad_location like this:
+#
+#   https://<host>:<port>/ad 
+
+use_psiturk_ad_server = false
+ad_location = https://floating-points-9999.herokuapp.com/pub
+
+

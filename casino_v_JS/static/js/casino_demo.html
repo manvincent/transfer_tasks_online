@@ -1,0 +1,1492 @@
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Experiment</title>
+    <script src="Dependencies/taskUtils.js"></script>
+    <script src="jspsych-6.0.5/jspsych.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-html-keyboard-response.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-image-keyboard-response.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-instructions.js"></script>
+    <script src="jspsych-6.0.5/plugins/jspsych-fullscreen.js"></script>
+    <script src="../designs/designArray.js"></script>
+    <script src="../designs/pract_design.js"></script>
+    <script src="../designs/mem_designArray.js"></script>
+    <link href="jspsych-6.0.5/css/jspsych.css" rel="stylesheet" type="text/css"></link>
+  </head>
+  <body></body>
+  <script>
+
+
+  // Initialize the timeline
+  var timeline = [];
+  // Force fullscreen
+  var go_full = {
+    type: "fullscreen",
+    fullscreen_mode: true,
+    data: {
+      label: "go_full",
+    },
+  };
+  timeline.push(go_full);
+
+  // Set up trial event durations
+  var blockStartDur = 3000;
+  var ITIdur = 500;
+  var cueDur = 3000;
+  var respDur = 1000;
+  var outDur = 1000;
+
+  // Set up clock
+  var d_start = new Date();
+  var t_start = 0;
+
+  // Specify image directories
+  var imageDir = "../images/";
+  var instructDir =  imageDir + "casinoInstructions/";
+  var memInstructDir = imageDir + "memoryProbeInstructions/";
+  var taskDir = imageDir + "task/";
+  var practDir = imageDir + "practice/";
+  var memDir = imageDir + "memoryProbe/";
+
+  // Define paths to general images
+  var bandit = [imageDir + "slotMachine.png"];
+  var slotUnselected = [imageDir + "unselected_box.png"];
+  var banditSelected = [imageDir + "slotMachine_selected.png"];
+  var tokenLoss = [imageDir + "token_Loss.png"];
+  var tokenGain = [imageDir + "token_Win.png"];
+  var iti = [imageDir + "fix.png"];
+
+
+  jsPsych.pluginAPI.preloadImages(bandit)
+  jsPsych.pluginAPI.preloadImages(slotUnselected)
+  jsPsych.pluginAPI.preloadImages(banditSelected)
+  jsPsych.pluginAPI.preloadImages(tokenLoss)
+  jsPsych.pluginAPI.preloadImages(tokenGain)
+  jsPsych.pluginAPI.preloadImages(iti)
+
+  // STORE DESIGN ID FOR EACH PARTICIPANT
+
+  // Load in design from csv file
+  var numDesigns = 10
+  //var designNo = getRandomIntInclusive(0,numDesigns-1);
+  var designNo = 0;
+  var designMat = designArray[designNo]
+
+  // These variables will change depending on the task
+  var blockID =  Array(designMat.length).fill(0)
+  var trialID =  Array(designMat.length).fill(0)
+  var trialStimID_1 =  Array(designMat.length).fill(0)
+  var trialStimID_2 =  Array(designMat.length).fill(0)
+  var trialStimReward_1 =  Array(designMat.length).fill(0)
+  var trialStimReward_2 =  Array(designMat.length).fill(0)
+  var trialLeftOutPath = Array(designMat.length).fill(0)
+  var trialRightOutPath = Array(designMat.length).fill(0)
+  // Convert from JSON object to set of arrays
+  for (t = 0; t < designMat.length; t++) {
+      blockID[t] = Number(designMat[t].blockID)
+      trialID[t] = Number(designMat[t].trialID)
+      trialStimID_1[t] = Number(designMat[t].trialStimID_1)
+      trialStimID_2[t] = Number(designMat[t].trialStimID_2)
+      trialStimReward_1[t] = Number(designMat[t].trialStimReward_1)
+      trialStimReward_2[t] = Number(designMat[t].trialStimReward_2)
+      // Create array holding outcome image paths conditional on boolean in matrix
+      if (trialStimReward_1[t] == 1) {
+        trialLeftOutPath[t] = tokenGain;
+      } else if (trialStimReward_1[t] == 0) {
+        trialLeftOutPath[t] = tokenLoss;
+      }
+      if (trialStimReward_2[t] == 1) {
+        trialRightOutPath[t] = tokenGain;
+      } else if (trialStimReward_2[t] == 0) {
+        trialRightOutPath[t] = tokenLoss;
+      }
+    }
+
+  // Initialize task parameters
+  var numBlocks = unique(blockID).length;
+  var numBlockTrials = Math.max.apply(Math, trialID);
+  var numTotalTrials = designMat.length;
+  var numStims = 23
+
+  // Set up choice keys
+  var leftAllowKey = jsPsych.pluginAPI.convertKeyCharacterToKeyCode('1');
+  var rightAllowKey = jsPsych.pluginAPI.convertKeyCharacterToKeyCode('4');
+  var choice_keys = [leftAllowKey, rightAllowKey]
+  // Casino section
+  // Draw b number of casino images randomly, b = # blocks
+  var blockList = arange(0, numBlocks-1, 1, 0)
+  jointShuffle(blockList)
+
+  // Preload block casinos images
+  var blockPaths  = [];
+  for (t = 0; t < numTotalTrials; t++) {
+    if (trialID[t] == 1) {
+      currBlock = blockList.pop()
+      blockPaths.push(taskDir + "/casinos/casino_" + currBlock + ".png")
+    } else {
+      blockPaths.push(imageDir+"/fix.png");
+    }
+  }
+  jsPsych.pluginAPI.preloadImages(blockPaths)
+
+  // Preload casino images for the left (1) side
+  var leftStimPaths = [];
+  for (s = 0; s < trialStimID_1.length; s++) {
+    leftStimPaths.push([taskDir + "stimuli/" + trialStimID_1[s] + ".bmp"]);
+  }
+  if (leftStimPaths.length !== numTotalTrials) {
+    throw new RangeError("# stims in matrix not equal to total number of trials.");
+  }
+  jsPsych.pluginAPI.preloadImages(leftStimPaths)
+  // Preload casino images for the right (2) side
+  var rightStimPaths = [];
+  for (s = 0; s < trialStimID_1.length; s++) {
+    rightStimPaths.push([taskDir + "stimuli/" + trialStimID_2[s] + ".bmp"]);
+  }
+  if (rightStimPaths.length !== numTotalTrials) {
+    throw new RangeError("# stims in matrix not equal to total number of trials.");
+  }
+  jsPsych.pluginAPI.preloadImages(rightStimPaths)
+
+  // Preload the end of task slide
+  var task_end = [imageDir + "task_end.png"]
+  jsPsych.pluginAPI.preloadImages(task_end)
+
+
+  // Preload instrumental instruction slides
+  var instruct_pages = [];
+  var exception_pageNo = [7,10,20,22,24,26,28,30];
+  for (s = 0; s < 32; s++) {
+    slideNo = s + 1;
+    if (! exception_pageNo.includes(slideNo)) {
+      instruct_pages.push(instructDir + 'casinoInstruct_' + slideNo + '.png');
+    }
+  }
+  jsPsych.pluginAPI.preloadImages(instruct_pages);
+  // Manually load in exception pages
+  var except_page7 = [instructDir + 'casinoInstruct_7.png'];
+  var except_page10 = [instructDir + 'casinoInstruct_10.png'];
+  var except_page20 = [instructDir + 'casinoInstruct_20.png'];
+  var except_page22 = [instructDir + 'casinoInstruct_22.png'];
+  var except_page24 = [instructDir + 'casinoInstruct_24.png'];
+  var except_page26 = [instructDir + 'casinoInstruct_26.png'];
+  var except_page28 = [instructDir + 'casinoInstruct_28.png'];
+  var except_page30 = [instructDir + 'casinoInstruct_30.png'];
+  jsPsych.pluginAPI.preloadImages(except_page7);
+  jsPsych.pluginAPI.preloadImages(except_page10);
+  jsPsych.pluginAPI.preloadImages(except_page20);
+  jsPsych.pluginAPI.preloadImages(except_page22);
+  jsPsych.pluginAPI.preloadImages(except_page24);
+  jsPsych.pluginAPI.preloadImages(except_page26);
+  jsPsych.pluginAPI.preloadImages(except_page28);
+  jsPsych.pluginAPI.preloadImages(except_page30);
+
+  // Load in design from csv file
+  var pract_designMat = pract_design;
+  var numPractTrials = pract_designMat.length;
+
+  // These variables will change depending on the task
+  var pract_blockID =  Array(pract_designMat.length).fill(0)
+  var pract_trialID =  Array(pract_designMat.length).fill(0)
+  var pract_trialStimID_1 =  Array(pract_designMat.length).fill(0)
+  var pract_trialStimID_2 =  Array(pract_designMat.length).fill(0)
+  var pract_trialStimReward_1 =  Array(pract_designMat.length).fill(0)
+  var pract_trialStimReward_2 =  Array(pract_designMat.length).fill(0)
+  var pract_trialLeftOutPath = Array(pract_designMat.length).fill(0)
+  var pract_trialRightOutPath = Array(pract_designMat.length).fill(0)
+  // Convert from JSON object to set of arrays
+  for (t = 0; t < pract_designMat.length; t++) {
+      pract_blockID[t] = Number(pract_designMat[t].blockID)
+      pract_trialID[t] = Number(pract_designMat[t].trialID)
+      pract_trialStimID_1[t] = Number(pract_designMat[t].trialStimID_1)
+      pract_trialStimID_2[t] = Number(pract_designMat[t].trialStimID_2)
+      pract_trialStimReward_1[t] = Number(pract_designMat[t].trialStimReward_1)
+      pract_trialStimReward_2[t] = Number(pract_designMat[t].trialStimReward_2)
+      // Create array holding outcome image paths conditional on boolean in matrix
+      if (pract_trialStimReward_1[t] == 1) {
+        pract_trialLeftOutPath[t] = tokenGain;
+      } else if (trialStimReward_1[t] == 0) {
+        pract_trialLeftOutPath[t] = tokenLoss;
+      }
+      if (pract_trialStimReward_2[t] == 1) {
+        pract_trialRightOutPath[t] = tokenGain;
+      } else if (trialStimReward_2[t] == 0) {
+        pract_trialRightOutPath[t] = tokenLoss;
+      }
+    }
+
+
+  // Preload block casinos images
+  var pract_numBlocks = unique(pract_blockID).length;
+  // Draw b number of casino images randomly, b = # blocks
+  var pract_blockList = arange(0, pract_numBlocks-1, 1, 0)
+  jointShuffle(pract_blockList)
+
+  var pract_blockPaths  = [];
+  for (t = 0; t < numPractTrials; t++) {
+    if (pract_trialID[t] == 1) {
+      currBlock = pract_blockList.pop()
+      pract_blockPaths.push(practDir + "/casinos/casino_" + currBlock + ".png")
+    } else {
+      pract_blockPaths.push(imageDir+"/fix.png");
+    }
+  }
+  jsPsych.pluginAPI.preloadImages(pract_blockPaths)
+
+  // Preload casino images for the left (1) side
+  var pract_leftStimPaths = [];
+  for (s = 0; s < pract_trialStimID_1.length; s++) {
+    pract_leftStimPaths.push([taskDir + "stimuli/" + pract_trialStimID_1[s] + ".bmp"]);
+  }
+  if (pract_leftStimPaths.length !== numPractTrials) {
+    throw new RangeError("# stims in matrix not equal to total number of trials (practice).");
+  }
+  jsPsych.pluginAPI.preloadImages(pract_leftStimPaths)
+  // Preload casino images for the right (2) side
+  var pract_rightStimPaths = [];
+  for (s = 0; s < pract_trialStimID_2.length; s++) {
+    pract_rightStimPaths.push([taskDir + "stimuli/" + pract_trialStimID_2[s] + ".bmp"]);
+  }
+  if (pract_rightStimPaths.length !== numPractTrials) {
+    throw new RangeError("# stims in matrix not equal to total number of trials (practice).");
+  }
+  jsPsych.pluginAPI.preloadImages(pract_rightStimPaths)
+
+
+  // Preload instrumental instruction slides
+  var mem_instruct_pages = [];
+  var mem_exception_pageNo = [5,7];
+  for (s = 0; s < 9; s++) {
+    slideNo = s + 1;
+    if (! mem_exception_pageNo.includes(slideNo)) {
+      mem_instruct_pages.push(memInstructDir + 'probeInstruct_0' + slideNo + '.png');
+    }
+  }
+  jsPsych.pluginAPI.preloadImages(mem_instruct_pages);
+  // Manually load in exception pages
+  var mem_except_page5 = [memInstructDir + 'probeInstruct_05.png'];
+  var mem_except_page7 = [memInstructDir + 'probeInstruct_07.png'];
+  jsPsych.pluginAPI.preloadImages(mem_except_page5);
+  jsPsych.pluginAPI.preloadImages(mem_except_page7);
+
+  // Load in design from csv file
+  var numMemDesigns = 2
+  //var memDesignNo = getRandomIntInclusive(0,numMemDesigns-1)
+  var memDesignNo = 0
+  var mem_designMat = mem_designArray[memDesignNo]
+  var numMemTrials = mem_designMat.length;
+
+  // Set up memory choice keys
+  var oldMemKey = jsPsych.pluginAPI.convertKeyCharacterToKeyCode('f');
+  var newMemKey = jsPsych.pluginAPI.convertKeyCharacterToKeyCode('j');
+  var mem_keys = [oldMemKey, newMemKey];
+
+  // These variables will change depending on the task
+  var mem_isNew =  Array(mem_designMat.length).fill(0)
+  var mem_stimPath = [];
+  // Convert from JSON object to set of arrays
+  for (t = 0; t < mem_designMat.length; t++) {
+    mem_isNew[t] = Number(mem_designMat[t].isNew)
+    currStimID = Number(mem_designMat[t].stimID)
+    if (mem_isNew[t] == 1) {
+      mem_stimPath.push([memDir + 'stimuli/' + currStimID +'.bmp'])
+    } else {
+      mem_stimPath.push([taskDir + 'stimuli/' + currStimID +'.bmp'])
+    }
+  }
+  // Pre load old/new choice images
+  var old_unselected = [memDir + "old_unselected.png"];
+  var new_unselected = [memDir + "new_unselected.png"];
+  jsPsych.pluginAPI.preloadImages(old_unselected)
+  jsPsych.pluginAPI.preloadImages(new_unselected)
+
+  // Pre load old/new response images
+  var old_selected = [memDir + "old_selected.png"];
+  var new_selected = [memDir + "new_selected.png"];
+  jsPsych.pluginAPI.preloadImages(old_selected)
+  jsPsych.pluginAPI.preloadImages(new_selected)
+
+
+  // Instruction  slides
+  // Create timeline variable
+  var instruct_timeline_var = [];
+  for (var trial = 0; trial < 31; trial++) {
+    instruct_timeline_var.push({
+      tv_instruct: instruct_pages[trial],
+    });
+  }
+
+  var initInstruct = {
+    type: "html-keyboard-response",
+    stimulus: "<div></div>",
+    choices: jsPsych.NO_KEYS,
+    trial_duration:0,
+    response_ends_trial: false,
+    data: {label: "initInstruct",
+          page_index:1
+          },
+  };
+
+
+  var instruct_page = {
+    type: "image-keyboard-response",
+    stimulus:  jsPsych.timelineVariable("tv_instruct"),
+    choices: ['space'],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except7 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page7,
+    choices: [leftAllowKey],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except10 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page10,
+    choices: [rightAllowKey],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except20 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page20,
+    choices: [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('k')],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except22 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page22,
+    choices: [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('f')],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except24 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page24,
+    choices: [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('j')],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except26 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page26,
+    choices: [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('j')],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except28 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page28,
+    choices: [leftAllowKey],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except30 = {
+    type: "image-keyboard-response",
+    stimulus:  except_page30,
+    choices: [rightAllowKey],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var except7_ifNode = {
+    timeline: [except7],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 7) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except10_ifNode = {
+    timeline: [except10],
+    conditional_function:  function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 10) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except20_ifNode = {
+    timeline: [except20],
+    conditional_function:  function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 20) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except22_ifNode = {
+    timeline: [except22],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 22) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except24_ifNode = {
+    timeline: [except24],
+    conditional_function:  function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 24) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except26_ifNode = {
+    timeline: [except26],
+    conditional_function:  function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 26) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except28_ifNode = {
+    timeline: [except28],
+    conditional_function:  function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 28) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var except30_ifNode = {
+    timeline: [except30],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 30) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var instruct_ifNode = {
+    timeline: [instruct_page],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index >= 33) {
+        return false;
+      } else {
+        return true;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var instruct_trialProcedure = {
+    timeline: [except7_ifNode,
+              except10_ifNode,
+              except20_ifNode,
+              except22_ifNode,
+              except24_ifNode,
+              except26_ifNode,
+              except28_ifNode,
+              except30_ifNode,
+              instruct_ifNode],
+    timeline_variables: instruct_timeline_var,
+  };
+
+  // Practice trials
+  // Create timeline variable
+  var practTimeline_var = [];
+  for (var trial = 0; trial < numPractTrials; trial++) {
+    practTimeline_var.push({
+      tv_leftStim: pract_leftStimPaths[trial],
+      tv_rightStim: pract_rightStimPaths[trial],
+      tv_leftOutBool: pract_trialStimReward_1[trial],
+      tv_rightOutBool: pract_trialStimReward_2[trial],
+      tv_leftOutPath: pract_trialLeftOutPath[trial],
+      tv_rightOutPath: pract_trialRightOutPath[trial],
+      tv_blockID: pract_blockID[trial],
+      tv_trialID: pract_trialID[trial],
+      tv_blockStim: pract_blockPaths[trial]
+    });
+  }
+
+  // Dummy ITI
+  // Create a 'dummy' ITI object of duration = 0. This will store task attributes
+  // for conditionals later on
+  var pract_initBlock = {
+    type: "html-keyboard-response",
+    stimulus: "<div></div>",
+    choices: jsPsych.NO_KEYS,
+    trial_duration:0,
+    response_ends_trial: false,
+    data: {label: "pract_initBlock",
+          blockID: jsPsych.timelineVariable("tv_blockID"),
+          trialID: jsPsych.timelineVariable("tv_trialID"),
+          blockStim: jsPsych.timelineVariable("tv_blockStim"),
+        },
+  };
+
+  var pract_blockStart = {
+    type: "html-keyboard-response",
+    choice: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      var html = "<style>" +
+      ".casino { position: absolute; top:220; left:310; height:190; width:375}" +
+      "</style>" +
+      "<div>" +
+      "<img src='"+prev_data.blockStim+"' class='casino'>" +
+      "</div>";
+      return html;
+    },
+    response_ends_trial: false,
+    trial_duration: blockStartDur,
+    data: {
+      label: "pract_block_start",
+    },
+  };
+
+  var pract_blockStart_ifNode = {
+    timeline: [pract_blockStart],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.trialID == 1) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var pract_pre_iti = {
+    type: "html-keyboard-response",
+    stimulus:
+    function() {
+      var html =
+      "<div><p style='color:black;font-size:60px;position:absolute;top:220;left:475'>+</p></div>"
+      return html;
+    },
+    choices: jsPsych.NO_KEYS,
+    trial_duration: ITIdur,
+    response_ends_trial: false,
+    data: {label: "pract_pre_iti",
+          leftOutBool: jsPsych.timelineVariable("tv_leftOutBool"),
+          rightOutBool: jsPsych.timelineVariable("tv_rightOutBool"),
+          leftStim: jsPsych.timelineVariable("tv_leftStim"),
+          rightStim: jsPsych.timelineVariable("tv_rightStim"),
+          leftOut: jsPsych.timelineVariable("tv_leftOutPath"),
+          rightOut: jsPsych.timelineVariable("tv_rightOutPath"),},
+    on_finish: function(data) {
+      data.trial_timeStape = t - t_start - d_start
+      t = new Date().getTime();
+    }
+  };
+
+
+  var pract_cue = {
+    type: "html-keyboard-response",
+    choices: choice_keys,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ bandit + " class='leftBandit' />" +
+      "<img src="+ slotUnselected + " class='leftSlot' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ bandit + " class='rightBandit' />" +
+      "<img src="+ slotUnselected + " class='rightSlot' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+      trial_duration: cueDur,
+      response_ends_trial: true,
+      data: {label: "pract_cue_on"},
+      on_finish: function(data) {
+        data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+      }
+    };
+
+
+  var pract_left_response = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ banditSelected + " class='leftBandit' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ bandit + " class='rightBandit' />" +
+      "<img src="+ slotUnselected + " class='rightSlot' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+    trial_duration: respDur,
+    response_ends_trial: false,
+    data: {label: "pract_left_response"},
+  };
+
+  var pract_right_response = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ bandit + " class='leftBandit' />" +
+      "<img src="+ slotUnselected + " class='leftslot' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ banditSelected + " class='rightBandit' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+    trial_duration: respDur,
+    response_ends_trial: false,
+    data: {label: "pract_right_response"},
+  }
+
+  var pract_no_response = {
+    type: 'html-keyboard-response',
+    choice: jsPsych.NO_KEYS,
+    stimulus: function() {
+      var html =
+      "<div><p style='color:black;font-size:60px;position:absolute;top:220;left:275'>Too slow to respond!</p></div>"
+      return html;
+    },
+    trial_duration: respDur + outDur,
+    response_ends_trial: false,
+    data: {label: "NA"},
+  };
+
+  var pract_leftOutcome = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ banditSelected + " class='leftBandit' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src='"+prev_data.leftOut[0]+"' class='leftOut'>" +
+      "<img src="+ bandit + " class='rightBandit' />" +
+      "<img src="+ slotUnselected + " class='rightSlot' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "pract_left outcome"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(4).values()[0];
+      // Update iterative variables (net gains)
+      data.currOutcome =  prev_data.leftOutBool
+    }
+  };
+
+  var pract_rightOutcome = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ bandit + " class='leftBandit' />" +
+      "<img src="+ slotUnselected + " class='leftslot' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ banditSelected + " class='rightBandit' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>" +
+      "<img src='"+prev_data.rightOut[0]+"' class='rightOut'>" +
+      "</div>";
+      return html;
+    },
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "pract_left outcome"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(4).values()[0];
+      // Update iterative variables (net gains)
+      data.currOutcome =  prev_data.leftOutBool
+    }
+  };
+
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var pract_leftResp_ifNode = {
+    timeline: [pract_left_response, pract_leftOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == leftAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var pract_rightResp_ifNode = {
+    timeline: [pract_right_response, pract_rightOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == rightAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var pract_noResp_ifNode = {
+    timeline: [pract_no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var practice_trialProcedure = {
+    timeline: [pract_initBlock, pract_blockStart_ifNode, pract_pre_iti, pract_cue, pract_leftResp_ifNode, pract_rightResp_ifNode, pract_noResp_ifNode],
+    timeline_variables: practTimeline_var,
+  };
+
+
+  // Create timeline variable
+  var banditTimeline_var = [];
+  for (var trial = 0; trial < numTotalTrials; trial++) {
+    banditTimeline_var.push({
+      tv_leftStim: leftStimPaths[trial],
+      tv_rightStim: rightStimPaths[trial],
+      tv_leftOutBool: trialStimReward_1[trial],
+      tv_rightOutBool: trialStimReward_2[trial],
+      tv_leftOutPath: trialLeftOutPath[trial],
+      tv_rightOutPath: trialRightOutPath[trial],
+      tv_blockID: blockID[trial],
+      tv_trialID: trialID[trial],
+      tv_blockStim: blockPaths[trial]
+    });
+  }
+
+  // Dummy ITI
+  // Create a 'dummy' ITI object of duration = 0. This will store task attributes
+  // for conditionals later on
+  var initBlock = {
+    type: "html-keyboard-response",
+    stimulus: "<div></div>",
+    choices: jsPsych.NO_KEYS,
+    trial_duration:0,
+    response_ends_trial: false,
+    data: {label: "initBlock",
+          blockID: jsPsych.timelineVariable("tv_blockID"),
+          trialID: jsPsych.timelineVariable("tv_trialID"),
+          blockStim: jsPsych.timelineVariable("tv_blockStim"),
+        },
+  };
+
+  var blockStart = {
+    type: "html-keyboard-response",
+    choice: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      var html = "<style>" +
+      ".casino { position: absolute; top:220; left:310; height:190; width:375}" +
+      "</style>" +
+      "<div>" +
+      "<img src='"+prev_data.blockStim+"' class='casino'>" +
+      "</div>";
+      return html;
+    },
+    response_ends_trial: false,
+    trial_duration: blockStartDur,
+    data: {
+      label: "block_start",
+    },
+  };
+
+  var blockStart_ifNode = {
+    timeline: [blockStart],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.trialID == 1) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var pre_iti = {
+    type: "html-keyboard-response",
+    stimulus:
+    function() {
+      var html =
+      "<div><p style='color:black;font-size:60px;position:absolute;top:220;left:475'>+</p></div>"
+      return html;
+    },
+    choices: jsPsych.NO_KEYS,
+    trial_duration: ITIdur,
+    response_ends_trial: false,
+    data: {label: "pre_iti",
+          leftOutBool: jsPsych.timelineVariable("tv_leftOutBool"),
+          rightOutBool: jsPsych.timelineVariable("tv_rightOutBool"),
+          leftStim: jsPsych.timelineVariable("tv_leftStim"),
+          rightStim: jsPsych.timelineVariable("tv_rightStim"),
+          leftOut: jsPsych.timelineVariable("tv_leftOutPath"),
+          rightOut: jsPsych.timelineVariable("tv_rightOutPath"),},
+    on_finish: function(data) {
+      data.trial_timeStape = t - t_start - d_start
+      t = new Date().getTime();
+    }
+  };
+
+
+  var cue = {
+    type: "html-keyboard-response",
+    choices: choice_keys,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ bandit + " class='leftBandit' />" +
+      "<img src="+ slotUnselected + " class='leftSlot' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ bandit + " class='rightBandit' />" +
+      "<img src="+ slotUnselected + " class='rightSlot' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+      trial_duration: cueDur,
+      response_ends_trial: true,
+      data: {label: "cue_on"},
+      on_finish: function(data) {
+        data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+      }
+    };
+
+
+  var left_response = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ banditSelected + " class='leftBandit' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ bandit + " class='rightBandit' />" +
+      "<img src="+ slotUnselected + " class='rightSlot' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+    trial_duration: respDur,
+    response_ends_trial: false,
+    data: {label: "left_response"},
+  };
+
+  var right_response = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ bandit + " class='leftBandit' />" +
+      "<img src="+ slotUnselected + " class='leftslot' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ banditSelected + " class='rightBandit' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+    trial_duration: respDur,
+    response_ends_trial: false,
+    data: {label: "right_response"},
+  }
+
+  var no_response = {
+    type: 'html-keyboard-response',
+    choice: jsPsych.NO_KEYS,
+    stimulus: function() {
+      var html =
+      "<div><p style='color:black;font-size:60px;position:absolute;top:220;left:275'>Too slow to respond!</p></div>"
+      return html;
+    },
+    trial_duration: respDur + outDur,
+    response_ends_trial: false,
+    data: {label: "NA"},
+  };
+
+  var leftOutcome = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ banditSelected + " class='leftBandit' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src='"+prev_data.leftOut[0]+"' class='leftOut'>" +
+      "<img src="+ bandit + " class='rightBandit' />" +
+      "<img src="+ slotUnselected + " class='rightSlot' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>";
+      "</div>";
+      return html;
+    },
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "left outcome"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(4).values()[0];
+      // Update iterative variables (net gains)
+      data.currOutcome =  prev_data.leftOutBool
+    }
+  };
+
+  var rightOutcome = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      var html = "<style>" +
+      ".leftBandit { position: absolute; top:120; left:120; height:400; width:325}" +
+      ".rightBandit { position: absolute; top:120; left:620; height:400; width:325}" +
+      ".leftSlot { position: absolute; top:180; left:160; height:61; width:175}" +
+      ".rightSlot { position: absolute; top:180; left:660; height:61; width:175}" +
+      ".leftStim { position: absolute; top:270; left:145; height:225; width:200}" +
+      ".rightStim { position: absolute; top:270; left:645; height:225; width:200}" +
+      ".leftOut { position: absolute; top:172; left:210; height:70; width:70}" +
+      ".rightOut { position: absolute; top:172; left:710; height:70; width:70}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ bandit + " class='leftBandit' />" +
+      "<img src="+ slotUnselected + " class='leftslot' />" +
+      "<img src='"+prev_data.leftStim[0]+"' class='leftStim'>" +
+      "<img src="+ banditSelected + " class='rightBandit' />" +
+      "<img src='"+prev_data.rightStim[0]+"' class='rightStim'>" +
+      "<img src='"+prev_data.rightOut[0]+"' class='rightOut'>" +
+      "</div>";
+      return html;
+    },
+    trial_duration: outDur,
+    response_ends_trial: false,
+    data: {label: "left outcome"},
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(4).values()[0];
+      // Update iterative variables (net gains)
+      data.currOutcome =  prev_data.leftOutBool
+    }
+  };
+
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var leftResp_ifNode = {
+    timeline: [left_response, leftOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == leftAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var rightResp_ifNode = {
+    timeline: [right_response, rightOutcome],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == rightAllowKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var noResp_ifNode = {
+    timeline: [no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(3).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var bandit_trialProcedure = {
+    timeline: [initBlock, blockStart_ifNode, pre_iti, cue, leftResp_ifNode, rightResp_ifNode, noResp_ifNode],
+    timeline_variables: banditTimeline_var,
+  };
+
+  // Create timeline variable
+  var memInstruct_timeline_var = [];
+  for (var trial = 0; trial < 9; trial++) {
+    memInstruct_timeline_var.push({
+      tv_instruct: mem_instruct_pages[trial],
+    });
+  }
+
+  var mem_initInstruct = {
+    type: "html-keyboard-response",
+    stimulus: "<div></div>",
+    choices: jsPsych.NO_KEYS,
+    trial_duration:0,
+    response_ends_trial: false,
+    data: {label: "initInstruct",
+          page_index:1
+          },
+  };
+
+  var mem_instruct_page = {
+    type: "image-keyboard-response",
+    stimulus:  jsPsych.timelineVariable("tv_instruct"),
+    choices: ['space'],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var mem_except5 = {
+    type: "image-keyboard-response",
+    stimulus:  mem_except_page5,
+    choices: [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('f')],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+  var mem_except7 = {
+    type: "image-keyboard-response",
+    stimulus:  mem_except_page7,
+    choices: [jsPsych.pluginAPI.convertKeyCharacterToKeyCode('j')],
+    trial_duration: null,
+    response_ends_trial: true,
+    on_finish: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      data.page_index = prev_data.page_index + 1
+    }
+  };
+
+
+  var mem_except5_ifNode = {
+    timeline: [mem_except5],
+    conditional_function:  function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 5) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var mem_except7_ifNode = {
+    timeline: [mem_except7],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index == 7) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+
+  var mem_instruct_ifNode = {
+    timeline: [mem_instruct_page],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.page_index >= 10) {
+        return false;
+      } else {
+        return true;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var memInstruct_trialProcedure = {
+    timeline: [mem_except5_ifNode,
+              mem_except7_ifNode,
+              mem_instruct_ifNode],
+    timeline_variables: memInstruct_timeline_var,
+  };
+
+  // Create timeline variable
+  var memTimeline_var = [];
+  for (var trial = 0; trial < numMemTrials; trial++) {
+    memTimeline_var.push({
+      tv_memStimPath: mem_stimPath[trial],
+    });
+  }
+
+  var mem_iti = {
+    type: "html-keyboard-response",
+    stimulus:
+    function() {
+      var html =
+      "<div><p style='color:black;font-size:60px;position:absolute;top:400;left:475'>+</p></div>"
+      return html;
+    },
+    choices: jsPsych.NO_KEYS,
+    trial_duration: ITIdur,
+    response_ends_trial: false,
+    data: {label: "mem_iti",
+          memStim: jsPsych.timelineVariable("tv_memStimPath")},
+  };
+
+
+  var mem_cue = {
+    type: "html-keyboard-response",
+    choices: mem_keys,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      var html = "<style>" +
+      ".memStim { position: absolute; top:220; left:310; height:400; width:325}" +
+      ".old { position: absolute; top:750; left:160; height:61; width:175}" +
+      ".new { position: absolute; top:750; left:660; height:61; width:175}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ prev_data.memStim + " class='memStim' />" +
+      "<img src="+ old_unselected + " class='old' />" +
+      "<img src="+ new_unselected + " class='new' />" +
+      "</div>";
+      return html;
+    },
+      trial_duration: cueDur,
+      response_ends_trial: true,
+      data: {label: "mem_cue"},
+      on_finish: function(data) {
+        data.respKey = jsPsych.pluginAPI.convertKeyCodeToKeyCharacter(data.key_press)
+      }
+    };
+
+
+  var mem_old_response = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      var html = "<style>" +
+      ".memStim { position: absolute; top:220; left:310; height:400; width:325}" +
+      ".old { position: absolute; top:750; left:160; height:61; width:175}" +
+      ".new { position: absolute; top:750; left:660; height:61; width:175}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ prev_data.memStim + " class='memStim' />" +
+      "<img src="+ old_selected + " class='old' />" +
+      "<img src="+ new_unselected + " class='new' />" +
+      "</div>";
+      return html;
+    },
+    trial_duration: respDur,
+    response_ends_trial: false,
+    data: {label: "left_response"},
+  };
+
+  var mem_new_response = {
+    type: "html-keyboard-response",
+    choices: jsPsych.NO_KEYS,
+    stimulus:
+    function() {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      var html = "<style>" +
+      ".memStim { position: absolute; top:220; left:310; height:400; width:325}" +
+      ".old { position: absolute; top:750; left:160; height:61; width:175}" +
+      ".new { position: absolute; top:750; left:660; height:61; width:175}" +
+      "</style>" +
+      "<div>" +
+      "<img src="+ prev_data.memStim + " class='memStim' />" +
+      "<img src="+ old_unselected + " class='old' />" +
+      "<img src="+ new_selected + " class='new' />" +
+      "</div>";
+      return html;
+    },
+    trial_duration: respDur,
+    response_ends_trial: false,
+    data: {label: "right_response"},
+  }
+
+  var mem_no_response = {
+    type: 'html-keyboard-response',
+    choice: jsPsych.NO_KEYS,
+    stimulus: function() {
+      var html =
+      "<div><p style='color:black;font-size:60px;position:absolute;top:220;left:275'>Too slow to respond!</p></div>"
+      return html;
+    },
+    trial_duration: respDur + outDur,
+    response_ends_trial: false,
+    data: {label: "NA"},
+  };
+
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var mem_oldResp_ifNode = {
+    timeline: [mem_old_response],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == oldMemKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+  // ifnode - conditional to determine whether mini-timeline is run
+  // ifnode must come after the events called in the mini-timeline
+  var mem_newResp_ifNode = {
+    timeline: [mem_new_response],
+    conditional_function: function() {
+      var prev_data = jsPsych.data.get().last(1).values()[0];
+      if (prev_data.key_press == newMemKey) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  var mem_noResp_ifNode = {
+    timeline: [mem_no_response],
+    conditional_function: function(data) {
+      var prev_data = jsPsych.data.get().last(2).values()[0];
+      if (prev_data.key_press == null) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var memory_trialProcedure = {
+    timeline: [mem_iti, mem_cue, mem_oldResp_ifNode, mem_newResp_ifNode, mem_noResp_ifNode],
+    timeline_variables: memTimeline_var,
+  };
+
+  // End page slide
+  // Create timeline variable
+  var endTask_var = [];
+  for (var trial = 0; trial < 1; trial++) {
+    endTask_var.push({
+      tv_end_task: task_end[trial],
+    });
+  }
+
+  var endTaskSlide = {
+    type: "image-keyboard-response",
+    stimulus:  jsPsych.timelineVariable("tv_end_task"),
+    choices: ['space'],
+    trial_duration: null,
+    response_ends_trial: true,
+  };
+
+  // timeline for one trial, combine ifnodes and fixed events
+  var endTask_procedure = {
+    timeline: [endTaskSlide],
+    timeline_variables: endTask_var
+  };
+
+
+  timeline.push(initInstruct)
+  timeline.push(instruct_trialProcedure)
+  timeline.push(practice_trialProcedure)
+  timeline.push(bandit_trialProcedure)
+  timeline.push(mem_initInstruct)
+  timeline.push(memInstruct_trialProcedure)
+  timeline.push(memory_trialProcedure)
+  timeline.push(endTask_procedure)
+
+  jsPsych.init({
+    timeline: timeline,
+    on_finish: function() {
+        jsPsych.data.displayData();
+      }
+  });
+
+
+  </script>
+</html>

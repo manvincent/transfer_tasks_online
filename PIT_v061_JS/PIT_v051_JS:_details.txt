@@ -1,0 +1,14 @@
+PIT_v051_JS: 
+
+Heroku app: 
+vast-forest-91817
+
+https://vast-forest-91817.herokuapp.com/
+
+postgres://epbqyiuhpnwvuz:95e12646f635a902b076d9f934788a7e30a5d832f5bebc82ec6e9fde8d58d067@ec2-34-200-116-132.compute-1.amazonaws.com:5432/dt5lrkgb5mmhj
+
+
+
+Delete database
+heroku restart && heroku pg:reset DATABASE --confirm vast-forest-91817 && heroku run rake db:migratez
+
